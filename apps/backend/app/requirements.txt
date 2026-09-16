@@ -1,0 +1,9 @@
+fastapi[standard]
+python-dotenv
+PyJWT
+bcrypt
+sqlalchemy
+cryptography
+alembic
+psycopg[binary]
+email-validator

@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linux Basics — hands-on terminal</title>
+<style>
+  :root{
+    --ink:#161b22; --ink-soft:#4a5560; --rule:#d3dae1;
+    --manual:#f5f7f8; --manual-edge:#e7ebee;
+    --console:#0d1318; --console-2:#141d24; --console-text:#c6d2da;
+    --prompt:#68b8e8; --ok:#5fbf87; --no:#e87070; --warn:#dda74a;
+    --teal:#0d6f68; --teal-soft:#e2efed;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono","Cascadia Mono",Menlo,Consolas,monospace;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:var(--serif); color:var(--ink); background:var(--console);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  /* ---------- header ---------- */
+  header{
+    flex:0 0 auto; background:var(--console); color:var(--console-text);
+    border-bottom:1px solid #223039; padding:.55rem 1rem;
+    display:flex; align-items:center; gap:1.2rem; flex-wrap:wrap;
+  }
+  .brand{font-family:var(--mono);font-size:.82rem;letter-spacing:.02em;color:#8fa3b0}
+  .brand b{color:#e6eef4;font-weight:600}
+  .steps{display:flex;gap:.3rem;flex-wrap:wrap;margin-left:auto}
+  .step{
+    font-family:var(--mono);font-size:.72rem;width:1.9rem;height:1.9rem;border-radius:50%;
+    border:1px solid #2c3d49;background:transparent;color:#7e909d;cursor:pointer;
+    display:grid;place-items:center;transition:background .15s,color .15s,border-color .15s;
+  }
+  .step:hover{border-color:var(--prompt);color:#cfe6f5}
+  .step.current{background:var(--prompt);border-color:var(--prompt);color:#07222f;font-weight:700}
+  .step.done{border-color:var(--ok);color:var(--ok)}
+  .step.done.current{background:var(--ok);border-color:var(--ok);color:#062514}
+  .step:focus-visible,button:focus-visible{outline:2px solid var(--prompt);outline-offset:2px}
+  /* ---------- layout ---------- */
+  main{flex:1 1 auto;display:flex;min-height:0}
+  #manual{
+    flex:0 0 44%; max-width:640px; background:var(--manual); border-right:1px solid var(--manual-edge);
+    display:flex;flex-direction:column;min-height:0;
+  }
+  .scroll{overflow-y:auto;padding:1.6rem 1.9rem 1.2rem;scrollbar-width:thin}
+  h1{
+    font-size:1.55rem;line-height:1.18;margin:0 0 .15rem;font-weight:600;letter-spacing:-.01em;
+  }
+  .lab-meta{font-family:var(--mono);font-size:.72rem;color:var(--teal);margin-bottom:1.1rem}
+  #manual h2{
+    font-size:.94rem;font-weight:600;margin:1.7rem 0 .5rem;
+    padding-bottom:.3rem;border-bottom:1px solid var(--rule);
+  }
+  #manual p{font-size:.95rem;line-height:1.62;margin:.6rem 0;max-width:62ch;color:#232a32}
+  #manual ul{font-size:.95rem;line-height:1.6;padding-left:1.1rem;max-width:62ch}
+  #manual li{margin:.3rem 0}
+  code{font-family:var(--mono);font-size:.84em;background:#e8ecef;padding:.1em .32em;border-radius:3px}
+  /* runnable command chips */
+  .cmds{margin:.7rem 0;border-left:2px solid var(--teal);padding-left:0}
+  .cmd{
+    display:flex;align-items:baseline;gap:.7rem;width:100%;text-align:left;cursor:pointer;
+    font-family:var(--mono);font-size:.8rem;background:transparent;border:0;
+    padding:.32rem .5rem .32rem .7rem;color:#1a2027;border-radius:0 3px 3px 0;
+  }
+  .cmd:hover{background:var(--teal-soft)}
+  .cmd .c{white-space:pre;flex:0 0 auto;font-weight:600}
+  .cmd .note{color:#6d7a85;font-family:var(--serif);font-size:.82rem;font-style:italic}
+  .cmd::after{
+    content:"run";margin-left:auto;font-size:.62rem;color:var(--teal);opacity:0;
+    text-transform:none;padding-left:.6rem;
+  }
+  .cmd:hover::after{opacity:1}
+  table{border-collapse:collapse;font-size:.86rem;margin:.8rem 0;width:100%}
+  th,td{text-align:left;padding:.32rem .6rem .32rem 0;border-bottom:1px solid var(--rule)}
+  th{font-weight:600;font-size:.78rem}
+  td code{background:none;padding:0}
+  .tree{font-family:var(--mono);font-size:.78rem;line-height:1.5;background:#eaeef0;padding:.8rem 1rem;border-radius:4px;white-space:pre;overflow-x:auto}
+  .aside{background:#eef1ee;border-left:2px solid var(--warn);padding:.6rem .9rem;margin:.9rem 0;font-size:.9rem;line-height:1.55;max-width:62ch}
+  /* ---------- tasks ---------- */
+  #tasks{border-top:1px solid var(--manual-edge);background:#eff2f4;padding:.9rem 1.9rem 0;flex:0 0 auto;max-height:44%;overflow-y:auto}
+  #tasks h2{margin:0 0 .5rem;font-size:.8rem;font-weight:600;border:0;padding:0;color:var(--ink-soft)}
+  .task{display:flex;gap:.6rem;align-items:flex-start;font-size:.88rem;line-height:1.5;padding:.26rem 0;color:#2a323a}
+  .task .box{
+    flex:0 0 auto;width:1.05rem;height:1.05rem;border:1.5px solid #b3bec6;border-radius:3px;
+    margin-top:.14rem;display:grid;place-items:center;font-size:.7rem;color:#fff;transition:.2s;
+  }
+  .task.done .box{background:var(--ok);border-color:var(--ok)}
+  .task.done .box::after{content:"✓"}
+  .task.done{color:#7d8a93;text-decoration:line-through;text-decoration-thickness:1px}
+  .task code{font-size:.82em}
+  .bar{display:flex;gap:.5rem;padding:.85rem 0;position:sticky;bottom:0;background:#eff2f4;flex-wrap:wrap}
+  button.act{
+    font-family:var(--serif);font-size:.85rem;padding:.44rem 1rem;border-radius:4px;cursor:pointer;
+    border:1px solid var(--rule);background:#fff;color:#2a323a;
+  }
+  button.act:hover{border-color:#98a6b0}
+  button.primary{background:var(--teal);border-color:var(--teal);color:#fff;font-weight:600}
+  button.primary:hover{background:#0a5952;border-color:#0a5952}
+  button.act:disabled{opacity:.45;cursor:default}
+  /* ---------- console ---------- */
+  #console{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;background:var(--console)}
+  .conbar{
+    flex:0 0 auto;display:flex;align-items:center;gap:.5rem;padding:.45rem .9rem;
+    background:var(--console-2);border-bottom:1px solid #223039;
+  }
+  .dot{width:.62rem;height:.62rem;border-radius:50%;background:#2f414d}
+  .conbar span{font-family:var(--mono);font-size:.72rem;color:#7e909d;margin-left:.4rem}
+  .conbar .hintbtn{margin-left:auto;font-family:var(--mono);font-size:.7rem;color:#7e909d;background:none;border:0;cursor:pointer}
+  .conbar .hintbtn:hover{color:var(--prompt)}
+  #screen{
+    flex:1 1 auto;overflow-y:auto;padding:.9rem 1.1rem 1.4rem;
+    font-family:var(--mono);font-size:.83rem;line-height:1.55;color:var(--console-text);
+    white-space:pre-wrap;word-break:break-word;cursor:text;
+  }
+  #screen b{color:#e8f1f7;font-weight:600}
+  .ps1{color:var(--prompt)}
+  .ps1 .path{color:#9ad3a6}
+  .err{color:var(--no)}
+  .sys{color:#6f8493;font-style:italic;font-family:var(--serif);font-size:.86rem}
+  .good{color:var(--ok)}
+  .warnc{color:var(--warn)}
+  .inputline{display:flex;align-items:baseline;font-family:var(--mono);font-size:.83rem}
+  #entry{
+    flex:1;background:transparent;border:0;outline:0;color:#e8f1f7;
+    font-family:var(--mono);font-size:.83rem;padding:0 0 0 .5ch;caret-color:var(--prompt);
+  }
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#39464f;border-radius:9px}
+  #manual ::-webkit-scrollbar-thumb,#tasks::-webkit-scrollbar-thumb{background:#c6ced4}
+  ::-webkit-scrollbar-track{background:transparent}
+  @media (max-width:860px){
+    main{flex-direction:column}
+    #manual{flex:0 0 auto;max-width:none;max-height:47%;border-right:0;border-bottom:1px solid var(--manual-edge)}
+    .scroll{padding:1rem 1.1rem}
+    #tasks{padding:.7rem 1.1rem 0;max-height:none}
+    .steps{width:100%;margin-left:0}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>linux basics</b> &nbsp;hands-on terminal</div>
+  <nav class="steps" id="steps" aria-label="Lab navigation"></nav>
+</header>
+
+<main>
+  <section id="manual">
+    <div class="scroll" id="manualBody"></div>
+    <div id="tasks">
+      <h2>Tasks — these tick themselves as you go</h2>
+      <div id="taskList"></div>
+      <div class="bar">
+        <button class="act primary" id="btnCheck">Check my work</button>
+        <button class="act" id="btnHint">Hint</button>
+        <button class="act" id="btnSolution">Show solution</button>
+        <button class="act" id="btnReset">Reset lab</button>
+        <button class="act" id="btnNext">Next lab →</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="console">
+    <div class="conbar">
+      <i class="dot"></i><i class="dot"></i><i class="dot"></i>
+      <span id="conTitle">labex@sandbox: ~</span>
+      <button class="hintbtn" id="btnHelp">type `help` for commands</button>
+    </div>
+    <div id="screen" tabindex="0"></div>
+  </section>
+</main>
+
+<script>
+/* ============================================================
+   PART 1 — virtual filesystem
+   ============================================================ */
+const HOME = "/home/labex";
+let FS, cwd, ranScripts;
+
+const D = (children) => ({ t:"d", mode:"755", children: children || {} });
+const F = (content, mode) => ({ t:"f", mode: mode || "644", content: content || "" });
+const L = (target) => ({ t:"l", mode:"777", target });
+
+const PASSWD =
+`root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+man:x:6:12:man:/var/cache/man:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+backup:x:34:34:backup:/var/backups:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+systemd-network:x:100:102:systemd:/run/systemd:/usr/sbin/nologin
+messagebus:x:101:104::/nonexistent:/usr/sbin/nologin
+labex:x:1000:1000:LabEx User:/home/labex:/bin/bash
+`;
+
+const USR_BIN = ("awk basename bash cat chmod chown cp curl cut date df diff du echo env "+
+  "file find grep gzip head hostname id less ln ls man mkdir mv nano ping printf ps pwd "+
+  "rm rmdir sed sort ssh stat tail tar tee touch tr uniq wc wget which whoami xargs zip").split(" ");
+
+const ETC_FILES = ["hostname","hosts","passwd","group","shadow","fstab","resolv.conf",
+  "profile","bash.bashrc","crontab","timezone","os-release","services","shells","sudoers"];
+
+function baseFS(){
+  const etc = {};
+  ETC_FILES.forEach((n,i) => {
+    etc[n] = F(n==="passwd" ? PASSWD
+      : n==="hostname" ? "sandbox\n"
+      : n==="hosts" ? "127.0.0.1\tlocalhost\n127.0.1.1\tsandbox\n"
+      : n==="os-release" ? 'NAME="Ubuntu"\nVERSION="22.04.3 LTS"\n'
+      : "# " + n + " configuration\n" + "setting" + i + " = value\n",
+      n==="shadow"||n==="sudoers" ? "640" : "644");
+  });
+  etc["apt"] = D({ "sources.list": F("deb http://archive.ubuntu.com/ubuntu jammy main\n") });
+  etc["ssh"] = D({ "ssh_config": F("Host *\n  SendEnv LANG\n") });
+
+  const bin = {};
+  USR_BIN.forEach(n => bin[n] = F("#!/bin/sh\n# " + n + "\n", "755"));
+
+  return D({
+    bin: L("/usr/bin"),
+    etc: D(etc),
+    home: D({ labex: D({
+      Desktop: D({}), Documents: D({ "todo.md": F("- learn the terminal\n") }), Downloads: D({}),
+      ".bashrc": F("# ~/.bashrc\nalias ll='ls -alF'\n"),
+      ".profile": F("# ~/.profile\n"),
+      "welcome.txt": F("Welcome to the sandbox. Work through the labs on the left.\n")
+    }) }),
+    root: D({}),
+    tmp: D({}),
+    usr: D({ bin: D(bin), share: D({ doc: D({}) }), local: D({ bin: D({}) }) }),
+    var: D({ log: D({ "syslog": F("Sep 14 09:00:01 sandbox systemd[1]: Started Daily apt.\n") }), www: D({}) })
+  });
+}
+
+function dirname(p){ const i = p.lastIndexOf("/"); return i <= 0 ? "/" : p.slice(0,i); }
+function basename(p){ return p.split("/").filter(Boolean).pop() || "/"; }
+
+function resolve(p, base){
+  base = base || cwd;
+  if(p === undefined || p === null || p === "") return base;
+  if(p === "~") p = HOME;
+  else if(p.slice(0,2) === "~/") p = HOME + p.slice(1);
+  const raw = p[0] === "/" ? p : base + "/" + p;
+  const out = [];
+  for(const seg of raw.split("/")){
+    if(seg === "" || seg === ".") continue;
+    if(seg === ".."){ out.pop(); continue; }
+    out.push(seg);
+  }
+  return "/" + out.join("/");
+}
+
+function getNode(path, follow, seen){
+  if(follow === undefined) follow = true;
+  seen = seen || 0;
+  if(seen > 12) return null;
+  const parts = path.split("/").filter(Boolean);
+  let node = FS, cur = "";
+  if(!node) return null;
+  for(let i = 0; i < parts.length; i++){
+    if(!node) return null;
+    if(node.t === "l"){
+      node = getNode(resolve(node.target, dirname(cur)), true, seen+1);
+      if(!node) return null;
+    }
+    if(node.t !== "d") return null;
+    node = node.children[parts[i]];
+    cur = cur + "/" + parts[i];
+    if(!node) return null;
+  }
+  if(node && node.t === "l" && follow)
+    return getNode(resolve(node.target, dirname(cur)), true, seen+1);
+  return node;
+}
+
+function parentOf(path){ return getNode(dirname(path)); }
+function exists(path){ return !!getNode(path, false); }
+function isDir(path){ const n = getNode(path); return !!n && n.t === "d"; }
+function isFile(path){ const n = getNode(path); return !!n && n.t === "f"; }
+
+function writeFile(path, content, mode){
+  const par = parentOf(path);
+  if(!par || par.t !== "d") return false;
+  const name = basename(path), ex = par.children[name];
+  if(ex && ex.t === "d") return false;
+  if(ex && ex.t === "f"){ ex.content = content; }
+  else par.children[name] = F(content, mode);
+  return true;
+}
+function readFile(path){ const n = getNode(path); return n && n.t === "f" ? n.content : null; }
+function mkdirp(path){
+  const parts = path.split("/").filter(Boolean);
+  let node = FS, cur = "";
+  for(const seg of parts){
+    cur += "/" + seg;
+    if(node.t === "l") node = getNode(cur === "/"+seg ? "/"+seg : cur);
+    if(!node.children[seg]) node.children[seg] = D({});
+    node = node.children[seg];
+    if(node.t === "l") node = getNode(node.target);
+    if(!node || node.t !== "d") return false;
+  }
+  return true;
+}
+function unlink(path){
+  const par = parentOf(path);
+  if(!par) return false;
+  const n = basename(path);
+  if(!par.children[n]) return false;
+  delete par.children[n];
+  return true;
+}
+function deepCopy(node){
+  if(node.t === "d"){
+    const c = {};
+    for(const k in node.children) c[k] = deepCopy(node.children[k]);
+    return { t:"d", mode:node.mode, children:c };
+  }
+  return Object.assign({}, node);
+}
+function sizeOf(node){
+  if(node.t === "d"){
+    let s = 4096;
+    for(const k in node.children) s += sizeOf(node.children[k]);
+    return s;
+  }
+  if(node.t === "l") return 12;
+  return node.content.length;
+}
+function listTree(path, node, out){
+  out = out || [];
+  out.push(path);
+  if(node.t === "d") for(const k of Object.keys(node.children).sort())
+    listTree(path === "/" ? "/"+k : path+"/"+k, node.children[k], out);
+  return out;
+}
+
+/* ============================================================
+   PART 2 — shell: tokenizing, expansion, redirection, pipes
+   ============================================================ */
+function tokenize(line){
+  const toks = []; let cur = "", q = null, qc = null, has = false;
+  for(let i = 0; i < line.length; i++){
+    const ch = line[i];
+    if(q){
+      if(ch === q){ q = null; }
+      else cur += ch;
+      has = true; continue;
+    }
+    if(ch === "'" || ch === '"'){ q = ch; qc = qc === "'" ? "'" : ch; has = true; continue; }
+    if(ch === "\\" && i+1 < line.length){ cur += line[++i]; has = true; continue; }
+    if(/\s/.test(ch)){ if(has){ toks.push({v:cur, q:qc}); cur=""; qc=null; has=false; } continue; }
+    cur += ch; has = true;
+  }
+  if(has) toks.push({v:cur, q:qc});
+  return toks;
+}
+
+const ENV = {
+  HOME: () => HOME, PWD: () => cwd, OLDPWD: () => HOME, USER: () => "labex",
+  LOGNAME: () => "labex", SHELL: () => "/bin/bash", HOSTNAME: () => "sandbox",
+  PATH: () => "/usr/local/bin:/usr/bin:/bin", TERM: () => "xterm-256color", LANG: () => "C.UTF-8"
+};
+
+function expandVars(s){
+  if(s[0] === "~" && (s.length === 1 || s[1] === "/")) s = HOME + s.slice(1);
+  s = s.replace(/\$\?/g, () => String(SESSION.lastCode));
+  return s.replace(/\$\{(\w+)\}|\$(\w+)/g, (m, a, b) => {
+    const k = a || b;
+    return ENV[k] !== undefined ? ENV[k]() : "";
+  });
+}
+
+/* $(...) and `...` — run the inner command, splice its output back in */
+function substitute(seg){
+  let guard = 0;
+  while(guard++ < 8){
+    const m = seg.match(/\$\(([^()]*)\)/) || seg.match(/`([^`]*)`/);
+    if(!m) break;
+    const before = seg.slice(0, m.index);
+    if((before.split("'").length - 1) % 2 === 1) break;   // inside single quotes: leave alone
+    const out = runLine(m[1]).out.replace(/\n+$/, "").replace(/\n/g, " ");
+    seg = before + out + seg.slice(m.index + m[0].length);
+  }
+  return seg;
+}
+
+function expandBraces(s){
+  const m = s.match(/^(.*?)\{([^{}]*,[^{}]*)\}(.*)$/);
+  if(!m) return [s];
+  const out = [];
+  for(const opt of m[2].split(","))
+    for(const tail of expandBraces(m[1] + opt + m[3])) out.push(tail);
+  return out;
+}
+
+function globMatch(pat, name){
+  let re = "^";
+  for(const ch of pat){
+    if(ch === "*") re += "[^/]*";
+    else if(ch === "?") re += "[^/]";
+    else re += ch.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  }
+  return new RegExp(re + "$").test(name);
+}
+
+function expandGlob(tok){
+  if(tok.q || !/[*?]/.test(tok.v)) return [tok.v];
+  const abs = tok.v[0] === "/";
+  const segs = tok.v.split("/").filter((s,i) => !(i===0 && s===""));
+  let bases = [abs ? "/" : ""];
+  for(let i = 0; i < segs.length; i++){
+    const seg = segs[i], next = [];
+    for(const b of bases){
+      if(!/[*?]/.test(seg)){ next.push(b === "" ? seg : (b === "/" ? "/"+seg : b+"/"+seg)); continue; }
+      const dirPath = resolve(b === "" ? "." : b);
+      const node = getNode(dirPath);
+      if(!node || node.t !== "d") continue;
+      for(const name of Object.keys(node.children).sort()){
+        if(name[0] === "." && seg[0] !== ".") continue;
+        if(globMatch(seg, name)) next.push(b === "" ? name : (b === "/" ? "/"+name : b+"/"+name));
+      }
+    }
+    bases = next;
+  }
+  return bases.length ? bases : [tok.v];
+}
+
+function expandAll(toks){
+  const out = [];
+  for(const t of toks){
+    if(t.q === "'"){ out.push(t.v); continue; }
+    const v = expandVars(t.v);
+    if(t.q === '"'){ out.push(v); continue; }
+    for(const b of expandBraces(v)) for(const g of expandGlob({v:b, q:null})) out.push(g);
+  }
+  return out;
+}
+
+/* split a line on ; && || at top level (outside quotes) */
+function splitChains(line){
+  const parts = []; let cur = "", q = null, op = ";";
+  for(let i = 0; i < line.length; i++){
+    const ch = line[i];
+    if(q){ cur += ch; if(ch === q) q = null; continue; }
+    if(ch === "'" || ch === '"'){ q = ch; cur += ch; continue; }
+    if(ch === "&" && line[i+1] === "&"){ parts.push({cmd:cur, op}); op = "&&"; cur = ""; i++; continue; }
+    if(ch === "|" && line[i+1] === "|"){ parts.push({cmd:cur, op}); op = "||"; cur = ""; i++; continue; }
+    if(ch === ";"){ parts.push({cmd:cur, op}); op = ";"; cur = ""; continue; }
+    cur += ch;
+  }
+  parts.push({cmd:cur, op});
+  return parts.filter(p => p.cmd.trim() !== "");
+}
+
+function splitPipes(line){
+  const parts = []; let cur = "", q = null;
+  for(let i = 0; i < line.length; i++){
+    const ch = line[i];
+    if(q){ cur += ch; if(ch === q) q = null; continue; }
+    if(ch === "'" || ch === '"'){ q = ch; cur += ch; continue; }
+    if(ch === "|" && line[i+1] !== "|" && line[i-1] !== "|"){ parts.push(cur); cur = ""; continue; }
+    cur += ch;
+  }
+  parts.push(cur);
+  return parts;
+}
+
+function extractRedirs(toks){
+  const args = [], r = { out:null, outApp:false, err:null, errApp:false, errToOut:false, in:null };
+  for(let i = 0; i < toks.length; i++){
+    const t = toks[i];
+    if(t.q){ args.push(t); continue; }
+    const v = t.v;
+    if(v === "2>&1"){ r.errToOut = true; continue; }
+    let m = v.match(/^(2?)(>>|>|<)(.*)$/);
+    if(m){
+      const target = m[3] !== "" ? m[3] : (toks[++i] ? toks[i].v : "");
+      if(m[3] === "" && !target){ continue; }
+      const tgt = expandVars(target);
+      if(m[2] === "<") r.in = tgt;
+      else if(m[1] === "2"){ r.err = tgt; r.errApp = m[2] === ">>"; }
+      else { r.out = tgt; r.outApp = m[2] === ">>"; }
+      continue;
+    }
+    if(v === "&>"){ const target = toks[++i] ? toks[i].v : ""; r.out = target; r.errToOut = true; continue; }
+    args.push(t);
+  }
+  return { args, r };
+}
+
+/* ============================================================
+   PART 3 — commands
+   ============================================================ */
+const OK = (out) => ({ out: out || "", err:"", code:0 });
+const ERR = (msg, out) => ({ out: out || "", err: msg.endsWith("\n") ? msg : msg + "\n", code:1 });
+const lines = (s) => s === "" ? [] : s.replace(/\n$/, "").split("\n");
+
+function flags(argv, takesArg){
+  takesArg = takesArg || "";
+  const f = new Set(), rest = [], opts = {};
+  for(let i = 0; i < argv.length; i++){
+    const a = argv[i];
+    if(a.length > 1 && a[0] === "-" && a !== "--" && !/^-\d/.test(a)){
+      if(a[1] === "-"){ f.add(a.slice(2)); continue; }
+      const body = a.slice(1);
+      for(let j = 0; j < body.length; j++){
+        const ch = body[j];
+        f.add(ch);
+        if(takesArg.includes(ch)){
+          if(j < body.length - 1){ opts[ch] = body.slice(j+1); j = body.length; }
+          else if(i+1 < argv.length){ opts[ch] = argv[++i]; }
+        }
+      }
+      continue;
+    }
+    rest.push(a);
+  }
+  return { f, rest, opts };
+}
+
+function modeStr(node){
+  const m = node.mode.padStart(3,"0").split("").map(Number);
+  const trip = n => ((n&4)?"r":"-") + ((n&2)?"w":"-") + ((n&1)?"x":"-");
+  return (node.t === "d" ? "d" : node.t === "l" ? "l" : "-") + trip(m[0]) + trip(m[1]) + trip(m[2]);
+}
+function human(n){
+  if(n < 1024) return n + "";
+  if(n < 1024*1024) return (n/1024 < 10 ? (n/1024).toFixed(1) : Math.round(n/1024)) + "K";
+  return (n/1048576).toFixed(1) + "M";
+}
+
+const CMDS = {};
+
+CMDS.pwd = () => OK(cwd + "\n");
+CMDS.whoami = () => OK("labex\n");
+CMDS.hostname = () => OK("sandbox\n");
+CMDS.date = () => OK("Mon Sep 14 09:41:12 UTC 2026\n");
+CMDS.clear = () => { if(typeof document !== "undefined") document.getElementById("screen").innerHTML = ""; return OK(); };
+CMDS.which = (a) => {
+  const out = a.map(n => USR_BIN.includes(n) ? "/usr/bin/" + n : null).filter(Boolean);
+  return out.length ? OK(out.join("\n") + "\n") : ERR("");
+};
+
+CMDS.cd = (a) => {
+  const target = a[0] === "-" ? (cwd.prev || HOME) : resolve(a[0] === undefined ? HOME : a[0]);
+  const n = getNode(target);
+  if(!n) return ERR("bash: cd: " + (a[0]||"") + ": No such file or directory");
+  if(n.t !== "d") return ERR("bash: cd: " + a[0] + ": Not a directory");
+  cwd = target;
+  return OK();
+};
+
+CMDS.ls = (a) => {
+  const { f, rest } = flags(a);
+  const paths = rest.length ? rest : ["."];
+  const chunks = [];
+  let err = "";
+  const many = paths.length > 1;
+  for(const p of paths){
+    const abs = resolve(p), node = getNode(abs);
+    if(!node){ err += "ls: cannot access '" + p + "': No such file or directory\n"; continue; }
+    let entries;
+    if(node.t === "d" && !f.has("d")){
+      entries = Object.keys(node.children).sort().filter(n => f.has("a") || n[0] !== ".");
+      if(f.has("a")) entries = [".",".."].concat(entries);
+      entries = entries.map(n => ({ name:n, node: n==="."?node : n===".."?(getNode(dirname(abs))||node) : node.children[n] }));
+    } else {
+      entries = [{ name:p, node }];
+    }
+    let body;
+    if(f.has("l")){
+      const rows = entries.map(e => {
+        const bytes = e.node.t === "d" ? 4096 : sizeOf(e.node);
+        const sz = f.has("h") ? human(bytes) : String(bytes);
+        return [modeStr(e.node), e.node.t==="d"?"2":"1", "labex", "labex", sz, "Sep 14 09:2" + (e.name.length % 9), e.name + (e.node.t==="l" ? " -> " + e.node.target : "")];
+      });
+      const w = [0,0,0,0,0].map((_,i) => Math.max.apply(null, rows.map(r => r[i].length).concat([0])));
+      body = (node.t === "d" && !f.has("d") ? "total " + (entries.length * 4) + "\n" : "") +
+        rows.map(r => r[0].padEnd(w[0]) + " " + r[1].padStart(w[1]) + " " + r[2].padEnd(w[2]) + " " +
+          r[3].padEnd(w[3]) + " " + r[4].padStart(w[4]) + " " + r[5] + " " + r[6]).join("\n") + (rows.length ? "\n" : "");
+    } else {
+      body = entries.map(e => e.name).join("\n") + (entries.length ? "\n" : "");
+    }
+    chunks.push((many ? p + ":\n" : "") + body);
+  }
+  const res = OK(chunks.join(many ? "\n" : ""));
+  res.err = err; if(err) res.code = 1;
+  return res;
+};
+
+CMDS.tree = (a) => {
+  const { f, rest } = flags(a);
+  const root = resolve(rest[0] || ".");
+  const node = getNode(root);
+  if(!node) return ERR("tree: " + (rest[0]||".") + ": No such file or directory");
+  let dirs = 0, files = 0, out = (rest[0] || ".") + "\n";
+  (function walk(n, prefix){
+    const keys = Object.keys(n.children).sort().filter(k => f.has("a") || k[0] !== ".");
+    keys.forEach((k, i) => {
+      const last = i === keys.length - 1, child = n.children[k];
+      out += prefix + (last ? "└── " : "├── ") + k + (child.t==="l" ? " -> " + child.target : "") + "\n";
+      if(child.t === "d"){ dirs++; walk(child, prefix + (last ? "    " : "│   ")); }
+      else files++;
+    });
+  })(node, "");
+  return OK(out + "\n" + dirs + " directories, " + files + " files\n");
+};
+
+CMDS.mkdir = (a) => {
+  const { f, rest } = flags(a);
+  let err = "";
+  for(const p of rest){
+    const abs = resolve(p);
+    if(f.has("p")){ mkdirp(abs); continue; }
+    if(exists(abs)){ err += "mkdir: cannot create directory '" + p + "': File exists\n"; continue; }
+    const par = parentOf(abs);
+    if(!par || par.t !== "d"){ err += "mkdir: cannot create directory '" + p + "': No such file or directory\n"; continue; }
+    par.children[basename(abs)] = D({});
+  }
+  return err ? { out:"", err, code:1 } : OK();
+};
+
+CMDS.rmdir = (a) => {
+  let err = "";
+  for(const p of a){
+    const abs = resolve(p), n = getNode(abs, false);
+    if(!n){ err += "rmdir: failed to remove '" + p + "': No such file or directory\n"; continue; }
+    if(n.t !== "d"){ err += "rmdir: failed to remove '" + p + "': Not a directory\n"; continue; }
+    if(Object.keys(n.children).length){ err += "rmdir: failed to remove '" + p + "': Directory not empty\n"; continue; }
+    unlink(abs);
+  }
+  return err ? { out:"", err, code:1 } : OK();
+};
+
+CMDS.rm = (a) => {
+  const { f, rest } = flags(a);
+  let err = "";
+  for(const p of rest){
+    const abs = resolve(p), n = getNode(abs, false);
+    if(!n){ if(!f.has("f")) err += "rm: cannot remove '" + p + "': No such file or directory\n"; continue; }
+    if(n.t === "d" && !(f.has("r") || f.has("R"))){ err += "rm: cannot remove '" + p + "': Is a directory\n"; continue; }
+    if(abs === "/" || abs === HOME){ err += "rm: refusing to remove '" + p + "'\n"; continue; }
+    unlink(abs);
+  }
+  return err ? { out:"", err, code:1 } : OK();
+};
+
+CMDS.touch = (a) => {
+  let err = "";
+  for(const p of a){
+    const abs = resolve(p);
+    if(exists(abs)) continue;
+    const par = parentOf(abs);
+    if(!par || par.t !== "d"){ err += "touch: cannot touch '" + p + "': No such file or directory\n"; continue; }
+    par.children[basename(abs)] = F("");
+  }
+  return err ? { out:"", err, code:1 } : OK();
+};
+
+CMDS.echo = (a) => {
+  const noNL = a[0] === "-n";
+  if(noNL) a = a.slice(1);
+  let s = a.join(" ");
+  if(a[0] === "-e"){ s = a.slice(1).join(" ").replace(/\\n/g,"\n").replace(/\\t/g,"\t"); }
+  return OK(s + (noNL ? "" : "\n"));
+};
+
+CMDS.printf = (a) => {
+  let fmt = a[0] || "", args = a.slice(1), i = 0;
+  fmt = fmt.replace(/\\n/g,"\n").replace(/\\t/g,"\t");
+  return OK(fmt.replace(/%[sd]/g, () => args[i++] !== undefined ? args[i-1] : ""));
+};
+
+CMDS.cat = (a, stdin) => {
+  const { f, rest } = flags(a);
+  let out = "", err = "";
+  if(!rest.length) out = stdin;
+  for(const p of rest){
+    const abs = resolve(p), n = getNode(abs);
+    if(!n){ err += "cat: " + p + ": No such file or directory\n"; continue; }
+    if(n.t === "d"){ err += "cat: " + p + ": Is a directory\n"; continue; }
+    out += n.content;
+  }
+  if(f.has("n")) out = lines(out).map((l,i) => String(i+1).padStart(6) + "\t" + l).join("\n") + "\n";
+  return { out, err, code: err ? 1 : 0 };
+};
+CMDS.less = CMDS.cat; CMDS.more = CMDS.cat;
+
+CMDS.head = (a, stdin) => {
+  const { f, rest, opts } = flags(a, "n");
+  const n = parseInt(opts.n !== undefined ? opts.n : 10, 10) || 10;
+  const src = rest.length ? (readFile(resolve(rest[0]))) : stdin;
+  if(src === null) return ERR("head: cannot open '" + rest[0] + "' for reading: No such file or directory");
+  const L2 = lines(src).slice(0, n);
+  return OK(L2.length ? L2.join("\n") + "\n" : "");
+};
+CMDS.tail = (a, stdin) => {
+  const { f, rest, opts } = flags(a, "n");
+  const n = parseInt(opts.n !== undefined ? opts.n : 10, 10) || 10;
+  const src = rest.length ? (readFile(resolve(rest[0]))) : stdin;
+  if(src === null) return ERR("tail: cannot open '" + rest[0] + "' for reading: No such file or directory");
+  const L2 = lines(src).slice(-n);
+  return OK(L2.length ? L2.join("\n") + "\n" : "");
+};
+
+CMDS.wc = (a, stdin) => {
+  const { f, rest } = flags(a);
+  const only = f.has("l") || f.has("w") || f.has("c");
+  const fmt = (s, name) => {
+    const l = s === "" ? 0 : s.split("\n").length - (s.endsWith("\n") ? 1 : 0);
+    const w = s.split(/\s+/).filter(Boolean).length;
+    const parts = [];
+    if(f.has("l") || !only) parts.push(l);
+    if(f.has("w") || !only) parts.push(w);
+    if(f.has("c") || !only) parts.push(s.length);
+    return parts.map(p => String(p).padStart(only && parts.length===1 ? 0 : 7)).join(" ") + (name ? " " + name : "");
+  };
+  if(!rest.length) return OK(fmt(stdin, "") + "\n");
+  let out = "", err = "";
+  for(const p of rest){
+    const c = readFile(resolve(p));
+    if(c === null){ err += "wc: " + p + ": No such file or directory\n"; continue; }
+    out += fmt(c, p) + "\n";
+  }
+  return { out, err, code: err ? 1 : 0 };
+};
+
+CMDS.cp = (a) => {
+  const { f, rest } = flags(a);
+  if(rest.length < 2) return ERR("cp: missing destination file operand");
+  const dst = rest.pop();
+  let err = "";
+  for(const src of rest){
+    const sAbs = resolve(src), sNode = getNode(sAbs, false);
+    if(!sNode){ err += "cp: cannot stat '" + src + "': No such file or directory\n"; continue; }
+    if(sNode.t === "d" && !(f.has("r") || f.has("R") || f.has("a"))){
+      err += "cp: -r not specified; omitting directory '" + src + "'\n"; continue;
+    }
+    let dAbs = resolve(dst);
+    if(isDir(dAbs)) dAbs = dAbs + "/" + basename(sAbs);
+    const par = parentOf(dAbs);
+    if(!par || par.t !== "d"){ err += "cp: cannot create '" + dst + "': No such file or directory\n"; continue; }
+    par.children[basename(dAbs)] = deepCopy(sNode);
+  }
+  return err ? { out:"", err, code:1 } : OK();
+};
+
+CMDS.mv = (a) => {
+  const { rest } = flags(a);
+  if(rest.length < 2) return ERR("mv: missing destination file operand");
+  const dst = rest.pop();
+  let err = "";
+  for(const src of rest){
+    const sAbs = resolve(src), sNode = getNode(sAbs, false);
+    if(!sNode){ err += "mv: cannot stat '" + src + "': No such file or directory\n"; continue; }
+    let dAbs = resolve(dst);
+    if(isDir(dAbs)) dAbs = dAbs + "/" + basename(sAbs);
+    const par = parentOf(dAbs);
+    if(!par || par.t !== "d"){ err += "mv: cannot move '" + src + "': No such file or directory\n"; continue; }
+    par.children[basename(dAbs)] = sNode;
+    unlink(sAbs);
+  }
+  return err ? { out:"", err, code:1 } : OK();
+};
+
+CMDS.find = (a) => {
+  const roots = [], pred = {};
+  for(let i = 0; i < a.length; i++){
+    if(a[i] === "-name"){ pred.name = a[++i]; }
+    else if(a[i] === "-type"){ pred.type = a[++i]; }
+    else if(a[i] === "-maxdepth"){ pred.depth = parseInt(a[++i],10); }
+    else if(a[i] === "-delete"){ pred.del = true; }
+    else if(a[i][0] !== "-") roots.push(a[i]);
+  }
+  if(!roots.length) roots.push(".");
+  let out = "", err = "";
+  const toDelete = [];
+  for(const r of roots){
+    const abs = resolve(r), node = getNode(abs, false);
+    if(!node){ err += "find: '" + r + "': No such file or directory\n"; continue; }
+    (function walk(n, display, absPath, depth){
+      let match = true;
+      if(pred.name && !globMatch(pred.name, basename(absPath) === "/" ? display : basename(display))) match = false;
+      if(pred.type === "f" && n.t !== "f") match = false;
+      if(pred.type === "d" && n.t !== "d") match = false;
+      if(pred.depth !== undefined && depth > pred.depth) return;
+      if(match){ out += display + "\n"; if(pred.del) toDelete.push(absPath); }
+      if(n.t === "d") for(const k of Object.keys(n.children).sort())
+        walk(n.children[k], display + "/" + k, absPath + "/" + k, depth + 1);
+    })(node, r.replace(/\/$/,""), abs, 0);
+  }
+  toDelete.forEach(unlink);
+  if(pred.del) out = "";
+  return { out, err, code: err ? 1 : 0 };
+};
+
+CMDS.grep = (a, stdin) => {
+  const { f, rest } = flags(a);
+  const pat = rest.shift();
+  if(pat === undefined) return ERR("usage: grep [OPTION]... PATTERN [FILE]...");
+  let re;
+  try { re = new RegExp(pat, f.has("i") ? "i" : ""); }
+  catch(e){ return ERR("grep: invalid pattern"); }
+  const targets = [];
+  if(rest.length){
+    for(const p of rest){
+      const abs = resolve(p), n = getNode(abs);
+      if(!n) { targets.push({ name:p, missing:true }); continue; }
+      if(n.t === "d"){
+        if(f.has("r") || f.has("R")){
+          for(const full of listTree(abs, n)){
+            const fn = getNode(full);
+            if(fn && fn.t === "f") targets.push({ name: p.replace(/\/$/,"") + full.slice(abs.length), content: fn.content });
+          }
+        } else targets.push({ name:p, isdir:true });
+        continue;
+      }
+      targets.push({ name:p, content:n.content });
+    }
+  } else targets.push({ name:null, content: stdin });
+
+  let out = "", err = "", count = 0, showName = targets.filter(t => t.name).length > 1;
+  for(const t of targets){
+    if(t.missing){ err += "grep: " + t.name + ": No such file or directory\n"; continue; }
+    if(t.isdir){ err += "grep: " + t.name + ": Is a directory\n"; continue; }
+    const ls = lines(t.content);
+    let fileCount = 0;
+    ls.forEach((l, i) => {
+      const hit = re.test(l);
+      if(f.has("v") ? !hit : hit){
+        count++; fileCount++;
+        if(f.has("c") || f.has("q")) return;
+        let prefix = "";
+        if(showName && t.name) prefix += t.name + ":";
+        if(f.has("n")) prefix += (i+1) + ":";
+        out += prefix + l + "\n";
+      }
+    });
+    if(f.has("c")) out += (showName && t.name ? t.name + ":" : "") + fileCount + "\n";
+  }
+  if(f.has("q")) out = "";
+  return { out, err, code: count ? 0 : 1 };
+};
+
+CMDS.sort = (a, stdin) => {
+  const { f, rest, opts } = flags(a, "k");
+  let src = rest.length ? readFile(resolve(rest[0])) : stdin;
+  if(src === null) return ERR("sort: cannot read: " + rest[0]);
+  let L2 = lines(src);
+  const keyN = opts.k ? parseInt(opts.k,10) : null;
+  const val = s => keyN ? (s.trim().split(/\s+/)[keyN-1] || "") : s;
+  L2.sort((x,y) => {
+    const a1 = val(x), b1 = val(y);
+    if(f.has("n")) return (parseFloat(a1)||0) - (parseFloat(b1)||0);
+    return a1 < b1 ? -1 : a1 > b1 ? 1 : 0;
+  });
+  if(f.has("r")) L2.reverse();
+  if(f.has("u")) L2 = L2.filter((v,i) => i === 0 || v !== L2[i-1]);
+  return OK(L2.length ? L2.join("\n") + "\n" : "");
+};
+
+CMDS.uniq = (a, stdin) => {
+  const { f, rest } = flags(a);
+  const src = rest.length ? readFile(resolve(rest[0])) : stdin;
+  if(src === null) return ERR("uniq: cannot read");
+  const L2 = lines(src), out = [];
+  let prev = null, n = 0;
+  for(const l of L2){
+    if(l === prev) n++;
+    else { if(prev !== null) out.push(f.has("c") ? String(n).padStart(7) + " " + prev : prev); prev = l; n = 1; }
+  }
+  if(prev !== null) out.push(f.has("c") ? String(n).padStart(7) + " " + prev : prev);
+  return OK(out.length ? out.join("\n") + "\n" : "");
+};
+
+CMDS.cut = (a, stdin) => {
+  let delim = "\t", fieldSpec = null; const files = [];
+  for(let i = 0; i < a.length; i++){
+    const t = a[i];
+    if(t.startsWith("-d")) delim = t.length > 2 ? t.slice(2) : a[++i];
+    else if(t.startsWith("-f")) fieldSpec = t.length > 2 ? t.slice(2) : a[++i];
+    else if(t[0] !== "-") files.push(t);
+  }
+  const src = files.length ? readFile(resolve(files[0])) : stdin;
+  if(src === null) return ERR("cut: " + files[0] + ": No such file or directory");
+  const idx = (fieldSpec || "1").split(",").map(s => parseInt(s,10));
+  const out = lines(src).map(l => idx.map(i => l.split(delim)[i-1] || "").join(delim)).join("\n");
+  return OK(out ? out + "\n" : "");
+};
+
+CMDS.awk = (a, stdin) => {
+  const prog = a.find(x => x.includes("{")) || "";
+  const files = a.filter(x => x !== prog && x[0] !== "-");
+  const src = files.length ? readFile(resolve(files[0])) : stdin;
+  if(src === null) return ERR("awk: cannot open " + files[0]);
+  const m = prog.match(/\{\s*print\s+(.+?)\s*\}/);
+  if(!m) return OK(src);
+  const fields = m[1].split(",").map(s => s.trim());
+  const out = lines(src).map(l => {
+    const F2 = l.trim().split(/\s+/);
+    return fields.map(f2 => {
+      const fm = f2.match(/^\$(\d+)$/);
+      if(fm) return fm[1] === "0" ? l : (F2[parseInt(fm[1],10)-1] || "");
+      return f2.replace(/^["']|["']$/g,"");
+    }).join(" ");
+  }).join("\n");
+  return OK(out ? out + "\n" : "");
+};
+
+CMDS.tee = (a, stdin) => {
+  const { f, rest } = flags(a);
+  for(const p of rest){
+    const abs = resolve(p);
+    const prev = f.has("a") ? (readFile(abs) || "") : "";
+    writeFile(abs, prev + stdin);
+  }
+  return OK(stdin);
+};
+
+CMDS.chmod = (a) => {
+  const { f, rest } = flags(a);
+  const spec = rest.shift();
+  if(!spec || !rest.length) return ERR("chmod: missing operand");
+  let err = "";
+  const apply = (node) => {
+    if(/^[0-7]{3,4}$/.test(spec)){ node.mode = spec.slice(-3); return; }
+    const m = spec.match(/^([ugoa]*)([+-=])([rwxX]+)$/);
+    if(!m){ err += "chmod: invalid mode: '" + spec + "'\n"; return; }
+    const who = m[1] || "a", op = m[2], bits = m[3];
+    const val = (bits.includes("r")?4:0) + (bits.includes("w")?2:0) + ((bits.includes("x")||bits.includes("X"))?1:0);
+    let cur = node.mode.padStart(3,"0").split("").map(Number);
+    const targets = who === "a" ? [0,1,2] : who.split("").map(c => ({u:0,g:1,o:2})[c]);
+    for(const t of targets){
+      if(op === "+") cur[t] |= val;
+      else if(op === "-") cur[t] &= ~val;
+      else cur[t] = val;
+    }
+    node.mode = cur.join("");
+  };
+  for(const p of rest){
+    const abs = resolve(p), n = getNode(abs, false);
+    if(!n){ err += "chmod: cannot access '" + p + "': No such file or directory\n"; continue; }
+    if(f.has("R") || f.has("r")) listTree(abs, n).forEach(fp => { const x = getNode(fp,false); if(x) apply(x); });
+    else apply(n);
+  }
+  return err ? { out:"", err, code:1 } : OK();
+};
+
+CMDS.chown = (a) => {
+  const { rest } = flags(a);
+  if(rest.length < 2) return ERR("chown: missing operand");
+  return ERR("chown: changing ownership of '" + rest[1] + "': Operation not permitted");
+};
+
+CMDS.ln = (a) => {
+  const { f, rest } = flags(a);
+  if(rest.length < 1) return ERR("ln: missing file operand");
+  const target = rest[0];
+  let linkPath = rest[1] !== undefined ? resolve(rest[1]) : resolve(basename(target));
+  if(isDir(linkPath)) linkPath = linkPath + "/" + basename(target);
+  const par = parentOf(linkPath);
+  if(!par || par.t !== "d") return ERR("ln: failed to create link '" + rest[1] + "': No such file or directory");
+  if(exists(linkPath)) return ERR("ln: failed to create symbolic link '" + rest[1] + "': File exists");
+  if(f.has("s")) par.children[basename(linkPath)] = L(target);
+  else {
+    const src = getNode(resolve(target));
+    if(!src) return ERR("ln: failed to access '" + target + "': No such file or directory");
+    if(src.t === "d") return ERR("ln: " + target + ": hard link not allowed for directory");
+    par.children[basename(linkPath)] = src;
+  }
+  return OK();
+};
+
+CMDS.readlink = (a) => {
+  const { rest } = flags(a);
+  const n = getNode(resolve(rest[0] || ""), false);
+  if(!n) return ERR("readlink: " + rest[0] + ": No such file or directory");
+  return n.t === "l" ? OK(resolve(n.target, dirname(resolve(rest[0]))) + "\n") : ERR("");
+};
+
+CMDS.du = (a) => {
+  const { f, rest } = flags(a);
+  const paths = rest.length ? rest : ["."];
+  let out = "", err = "";
+  for(const p of paths){
+    const abs = resolve(p), n = getNode(abs);
+    if(!n){ err += "du: cannot access '" + p + "': No such file or directory\n"; continue; }
+    const emit = (node, display) => {
+      const bytes = sizeOf(node);
+      const size = f.has("h") ? human(bytes) : String(Math.max(4, Math.round(bytes/1024)));
+      out += size + "\t" + display + "\n";
+    };
+    if(f.has("s")) emit(n, p.replace(/\/$/,""));
+    else {
+      if(n.t === "d") for(const full of listTree(abs, n)){
+        const node = getNode(full);
+        if(node && node.t === "d") emit(node, p.replace(/\/$/,"") + full.slice(abs.length));
+      } else emit(n, p);
+    }
+  }
+  return { out, err, code: err ? 1 : 0 };
+};
+
+CMDS.df = () => OK(
+"Filesystem      Size  Used Avail Use% Mounted on\n" +
+"overlay          40G   12G   26G  32% /\n" +
+"tmpfs           1.9G     0  1.9G   0% /dev/shm\n");
+
+const TAR_MAGIC = "\u0001TARGZ:";
+CMDS.tar = (a) => {
+  const { f, rest, opts } = flags(a, "fC");
+  const fileArg = opts.f || (f.has("f") ? rest.shift() : null);
+  const changeDir = opts.C || null;
+  if(f.has("c")){
+    if(!fileArg) return ERR("tar: no archive name given");
+    const members = {};
+    for(const src of rest){
+      const abs = resolve(src), node = getNode(abs, false);
+      if(!node) return ERR("tar: " + src + ": Cannot stat: No such file or directory");
+      members[src.replace(/\/$/,"")] = deepCopy(node);
+    }
+    if(!Object.keys(members).length) return ERR("tar: Cowardly refusing to create an empty archive");
+    writeFile(resolve(fileArg), TAR_MAGIC + JSON.stringify(members));
+    return OK();
+  }
+  const raw = readFile(resolve(fileArg || ""));
+  if(raw === null) return ERR("tar: " + fileArg + ": Cannot open: No such file or directory");
+  if(raw.slice(0, TAR_MAGIC.length) !== TAR_MAGIC) return ERR("tar: This does not look like a tar archive");
+  const members = JSON.parse(raw.slice(TAR_MAGIC.length));
+  if(f.has("t")){
+    let out = "";
+    for(const name in members){
+      const walk = (n, p) => {
+        out += p + (n.t === "d" ? "/" : "") + "\n";
+        if(n.t === "d") for(const k of Object.keys(n.children).sort()) walk(n.children[k], p + "/" + k);
+      };
+      walk(members[name], name);
+    }
+    return OK(out);
+  }
+  if(f.has("x")){
+    const base = changeDir ? resolve(changeDir) : cwd;
+    if(!isDir(base)) return ERR("tar: " + changeDir + ": Cannot chdir: No such file or directory");
+    for(const name in members){
+      const dest = resolve(name, base);
+      mkdirp(dirname(dest));
+      const par = parentOf(dest);
+      par.children[basename(dest)] = deepCopy(members[name]);
+    }
+    return OK();
+  }
+  return ERR("tar: You must specify one of the '-ctx' options");
+};
+CMDS.gzip = (a) => { const p = resolve(flags(a).rest[0]||""); const c = readFile(p);
+  if(c === null) return ERR("gzip: no such file"); writeFile(p + ".gz", c); unlink(p); return OK(); };
+CMDS.gunzip = (a) => { const p = resolve(flags(a).rest[0]||""); const c = readFile(p);
+  if(c === null || !p.endsWith(".gz")) return ERR("gunzip: not in gzip format"); writeFile(p.slice(0,-3), c); unlink(p); return OK(); };
+
+CMDS.file = (a) => {
+  let out = "";
+  for(const p of a){
+    const n = getNode(resolve(p), false);
+    if(!n){ out += p + ": cannot open (No such file or directory)\n"; continue; }
+    if(n.t === "d") out += p + ": directory\n";
+    else if(n.t === "l") out += p + ": symbolic link to " + n.target + "\n";
+    else if(n.content.slice(0, TAR_MAGIC.length) === TAR_MAGIC) out += p + ": gzip compressed data, from Unix\n";
+    else if(n.content.startsWith("#!")) out += p + ": " + (n.content.split("\n")[0].includes("bash") ? "Bourne-Again shell script" : "script") + ", ASCII text executable\n";
+    else if(n.content === "") out += p + ": empty\n";
+    else out += p + ": ASCII text\n";
+  }
+  return OK(out);
+};
+
+CMDS.stat = (a) => {
+  const p = a[0]; const n = getNode(resolve(p || ""), false);
+  if(!n) return ERR("stat: cannot statx '" + p + "': No such file or directory");
+  return OK("  File: " + p + "\n  Size: " + sizeOf(n) + "\t\tType: " +
+    (n.t === "d" ? "directory" : n.t === "l" ? "symbolic link" : "regular file") +
+    "\nAccess: (0" + n.mode + "/" + modeStr(n) + ")  Uid: ( 1000/  labex)   Gid: ( 1000/  labex)\nModify: 2026-09-14 09:24:11\n");
+};
+
+CMDS.history = () => OK(SESSION.history.map((h,i) => String(i+1).padStart(5) + "  " + h).join("\n") + "\n");
+
+CMDS.man = (a) => {
+  const t = a[0];
+  const pages = {
+    ls:"ls - list directory contents\n  -l  long listing\n  -a  do not ignore entries starting with .\n  -h  human-readable sizes\n  -R  recurse into subdirectories",
+    mkdir:"mkdir - make directories\n  -p  no error if existing, make parent directories as needed",
+    rm:"rm - remove files or directories\n  -r  remove directories and their contents recursively\n  -f  never prompt\n  -i  prompt before every removal",
+    cp:"cp - copy files and directories\n  -r  copy directories recursively\n  -a  archive mode: preserve mode, ownership, timestamps",
+    grep:"grep - print lines matching a pattern\n  -i  ignore case\n  -r  recursive\n  -n  line numbers\n  -c  count matching lines\n  -v  invert match\n  -E  extended regular expressions",
+    find:"find - search for files in a directory hierarchy\n  -name PATTERN   match the file name\n  -type f|d       restrict to files or directories\n  -maxdepth N     descend at most N levels",
+    chmod:"chmod - change file mode bits\n  Numeric: r=4 w=2 x=1, one digit per class (owner, group, other)\n  Symbolic: u/g/o/a followed by +/-/= and rwx\n  -R  recurse",
+    tar:"tar - archiving utility\n  -c  create   -x  extract   -t  list\n  -z  filter through gzip\n  -f  use archive file\n  -C  change to directory before extracting",
+    wc:"wc - print newline, word and byte counts\n  -l  lines only\n  -w  words only\n  -c  bytes only",
+    ln:"ln - make links between files\n  -s  make symbolic links instead of hard links"
+  };
+  if(!t) return ERR("What manual page do you want?");
+  return pages[t] ? OK("NAME\n  " + pages[t] + "\n") : ERR("No manual entry for " + t);
+};
+
+CMDS.help = () => OK(
+"Available in this sandbox:\n\n" +
+"  navigate   pwd  ls  cd  tree  find  which  stat  file\n" +
+"  files      touch  cat  less  head  tail  wc  echo  printf\n" +
+"  manage     mkdir  rmdir  cp  mv  rm  ln  chmod  du  df\n" +
+"  text       grep  sort  uniq  cut  awk  tee\n" +
+"  archive    tar  gzip  gunzip\n" +
+"  shell      pipes |   redirection > >> 2> 2>&1 <   chaining && || ;\n" +
+"             globs *   braces {a,b}   heredoc <<'EOF'   history\n" +
+"  lab        check   hint   solution   reset   next   labs\n\n" +
+"Try `man ls` for a short page on any of the main commands.\n");
+
+/* ============================================================
+   PART 4 — the shell loop
+   ============================================================ */
+const SESSION = { history: [], heredoc: null, lastCode: 0 };
+
+function runScript(path, node){
+  ranScripts.add(path);
+  const body = node.content.split("\n").filter(l => l.trim() && !l.startsWith("#"));
+  let out = "", err = "";
+  for(const l of body){ const r = runLine(l); out += r.out; err += r.err; }
+  return { out, err, code:0 };
+}
+
+function runSimple(segment, stdin){
+  const toks = tokenize(substitute(segment));
+  if(!toks.length) return OK();
+  const { args, r } = extractRedirs(toks);
+  const argv = expandAll(args);
+  if(!argv.length) return OK();
+  const name = argv[0], rest = argv.slice(1);
+
+  if(r.in !== null){
+    const c = readFile(resolve(r.in));
+    if(c === null) return ERR("bash: " + r.in + ": No such file or directory");
+    stdin = c;
+  }
+
+  let res;
+  if(name.includes("/") && (name.startsWith("./") || name.startsWith("/") || name.startsWith("../"))){
+    const abs = resolve(name), n = getNode(abs);
+    if(!n) res = ERR("bash: " + name + ": No such file or directory");
+    else if(n.t === "d") res = ERR("bash: " + name + ": Is a directory");
+    else if(!(parseInt(n.mode[0],10) & 1)) res = ERR("bash: " + name + ": Permission denied");
+    else res = runScript(abs, n);
+  }
+  else if(CMDS[name]) res = CMDS[name](rest, stdin === undefined ? "" : stdin);
+  else if(UI_CMDS[name]) res = UI_CMDS[name](rest);
+  else res = ERR("bash: " + name + ": command not found");
+
+  if(r.errToOut && !r.out){ res = { out: res.out + res.err, err:"", code:res.code }; }
+  if(r.out !== null){
+    const abs = resolve(r.out);
+    let payload = res.out;
+    if(r.errToOut) { payload = res.out + res.err; res.err = ""; }
+    const prev = r.outApp ? (readFile(abs) || "") : "";
+    if(!writeFile(abs, prev + payload)) return ERR("bash: " + r.out + ": No such file or directory");
+    res = { out:"", err:res.err, code:res.code };
+  }
+  if(r.err !== null){
+    const abs = resolve(r.err);
+    const prev = r.errApp ? (readFile(abs) || "") : "";
+    writeFile(abs, prev + res.err);
+    res = { out:res.out, err:"", code:res.code };
+  }
+  return res;
+}
+
+function execWithStdin(cmdLine, input){
+  const toks = tokenize(cmdLine);
+  const { args, r } = extractRedirs(toks);
+  const argv = expandAll(args);
+  if(!argv.length) return OK();
+  const run = CMDS[argv[0]] ? CMDS[argv[0]](argv.slice(1), input)
+            : ERR("bash: " + argv[0] + ": command not found");
+  if(r.out !== null){
+    const abs = resolve(r.out);
+    const prev = r.outApp ? (readFile(abs) || "") : "";
+    if(!writeFile(abs, prev + run.out)) return ERR("bash: " + r.out + ": No such file or directory");
+    return { out:"", err:run.err, code:run.code };
+  }
+  return run;
+}
+
+function feedLine(line){
+  if(SESSION.heredoc){
+    if(line.trim() === SESSION.heredoc.delim){
+      const hd = SESSION.heredoc;
+      SESSION.heredoc = null;
+      const res = execWithStdin(hd.cmdLine, hd.buf.join("\n") + (hd.buf.length ? "\n" : ""));
+      res.pending = false;
+      return res;
+    }
+    SESSION.heredoc.buf.push(line);
+    return { out:"", err:"", code:0, pending:true };
+  }
+  const hd = line.match(/<<\s*'?"?([A-Za-z_][A-Za-z0-9_]*)'?"?\s*$/);
+  if(hd){
+    SESSION.heredoc = { delim: hd[1], cmdLine: line.slice(0, hd.index), buf: [] };
+    return { out:"", err:"", code:0, pending:true };
+  }
+  const res = runLine(line);
+  res.pending = false;
+  return res;
+}
+
+function runLine(line){
+  let out = "", err = "", code = 0;
+  for(const chain of splitChains(line)){
+    if(chain.op === "&&" && code !== 0) continue;
+    if(chain.op === "||" && code === 0) continue;
+    const stages = splitPipes(chain.cmd);
+    let stdin = "";
+    for(let i = 0; i < stages.length; i++){
+      const res = runSimple(stages[i], stdin);
+      err += res.err;
+      code = res.code;
+      if(i === stages.length - 1) out += res.out;
+      else stdin = res.out;
+    }
+  }
+  SESSION.lastCode = code;
+  return { out, err, code };
+}
+
+/* ============================================================
+   PART 5 — lab content
+   ============================================================ */
+const c = (cmd, note) => ({ cmd, note });
+const has = (p) => exists(resolve(p, HOME));
+const dir = (p) => isDir(resolve(p, HOME));
+const read = (p) => readFile(resolve(p, HOME));
+const mode = (p) => { const n = getNode(resolve(p, HOME), false); return n ? n.mode : null; };
+const link = (p) => { const n = getNode(resolve(p, HOME), false); return !!n && n.t === "l"; };
+const nlines = (p) => { const t = read(p); return t === null ? -1 : lines(t).length; };
+const match = (p, re) => { const t = read(p); return t !== null && re.test(t); };
+const tarMembers = (p) => {
+  const t = read(p);
+  if(t === null || t.slice(0, TAR_MAGIC.length) !== TAR_MAGIC) return null;
+  const m = JSON.parse(t.slice(TAR_MAGIC.length));
+  const out = [];
+  for(const name in m){
+    (function walk(n, pth){ out.push(pth); if(n.t === "d") for(const k in n.children) walk(n.children[k], pth + "/" + k); })(m[name], name);
+  }
+  return out;
+};
+
+const LABS = [
+{
+  id:1, title:"Find your way around", sub:"pwd · ls · cd · paths",
+  intro:"Everything else you will ever do in a terminal assumes you know two things: where you are, and what is around you. Three commands answer that, and you will type them tens of thousands of times.",
+  body:[
+    { h:"Where am I?", p:"The shell always has a current directory. <code>pwd</code> prints it. The prompt on the right shows it too, with <code>~</code> standing in for your home directory.",
+      cmds:[ c("pwd","print working directory") ] },
+    { h:"What is here?", p:"<code>ls</code> lists the current directory. Its flags are worth learning properly now rather than guessing at forever. Run these and compare the output.",
+      cmds:[ c("ls","bare names, columns"), c("ls -l","long: permissions, owner, size, date"), c("ls -a","include hidden entries, the dot files"), c("ls -la","both together — the one you'll type most"), c("ls -lh","sizes as 4.0K instead of 4096"), c("ls -l /etc","point it anywhere, not just here") ] },
+    { h:"Moving", p:"<code>cd</code> changes directory. An <strong>absolute</strong> path starts at the root <code>/</code> and works from anywhere. A <strong>relative</strong> path starts from where you already are.",
+      cmds:[ c("cd /etc","absolute"), c("pwd",""), c("cd ..","up one level"), c("cd ~","home"), c("cd","home as well, with no argument") ] },
+    { h:"Sending output into a file", p:"<code>&gt;</code> takes whatever a command would have printed and writes it to a file instead. You need it for the tasks below, and constantly thereafter.",
+      cmds:[ c("ls /etc > /tmp/demo.txt","write"), c("cat /tmp/demo.txt","read it back") ] }
+  ],
+  tasks:[
+    { text:"Create a directory called <code>lab01</code> in your home directory", check:()=>dir("lab01") },
+    { text:"Write the absolute path of your home directory into <code>lab01/where.txt</code>", check:()=>match("lab01/where.txt", /\/home\/labex/) },
+    { text:"Save a long-format, human-readable listing of <code>/etc</code> to <code>lab01/etc-listing.txt</code>", check:()=>match("lab01/etc-listing.txt", /^[-dl]rw[-x]/m) && match("lab01/etc-listing.txt", /passwd/) && match("lab01/etc-listing.txt", /\d+(\.\d)?K|\b\d{3,}\b/) },
+    { text:"Save the number of entries in <code>/usr/bin</code> to <code>lab01/bin-count.txt</code> — the number alone", check:()=>{ const t = read("lab01/bin-count.txt"); return t !== null && new RegExp("^\\s*" + USR_BIN.length + "\\s*$").test(t.trim()); } }
+  ],
+  hints:[ "Task 2: run <code>pwd</code> while you are in your home directory and redirect it with <code>&gt;</code>.",
+          "Task 3: two flags on <code>ls</code>, combined, pointed at <code>/etc</code>.",
+          "Task 4: <code>ls /usr/bin</code> prints one name per line when its output goes to a file or pipe, so pipe it into <code>wc -l</code>." ],
+  solution:["cd ~","mkdir lab01","pwd > lab01/where.txt","ls -lh /etc > lab01/etc-listing.txt","ls /usr/bin | wc -l > lab01/bin-count.txt"]
+},
+{
+  id:2, title:"Make and read files", sub:"touch · echo · cat · head · tail · wc",
+  intro:"Files are where the work lives. Creating them, appending to them and pulling pieces out of them is most of what a shell session actually consists of.",
+  body:[
+    { h:"Creating", p:"<code>touch</code> makes an empty file. <code>echo</code> plus a redirect makes one with content in it.",
+      cmds:[ c("touch empty.txt",""), c('echo "hello" > greet.txt','> writes, replacing everything'), c('echo "again" >> greet.txt','>> appends one line'), c("cat greet.txt","") ] },
+    { h:"The difference that costs people data", p:"<code>&gt;</code> empties the file to zero bytes <em>before</em> writing. <code>&gt;&gt;</code> adds to the end. Getting these confused is how an afternoon disappears.",
+      aside:"When you are not certain, use <code>&gt;&gt;</code>. An extra line is recoverable; an overwritten file is not." },
+    { h:"Reading", p:"Whole file, top, bottom, or just a count.",
+      cmds:[ c("cat /etc/hosts","whole file"), c("cat -n /etc/passwd","with line numbers"), c("head -n 3 /etc/passwd","first 3 lines"), c("tail -n 2 /etc/passwd","last 2 lines"), c("wc -l /etc/passwd","count lines"), c("wc -l < /etc/passwd","same count, without the filename") ] },
+    { h:"Several lines at once", p:"A heredoc feeds everything up to your chosen marker into the command. Type this line, press Enter, and the prompt changes to <code>&gt;</code> until you type <code>EOF</code>.",
+      cmds:[ c("cat > demo.txt <<'EOF'","then type lines, then EOF on its own") ] }
+  ],
+  tasks:[
+    { text:"Create <code>lab02</code> and, inside it, <code>notes.txt</code> holding exactly the three lines from the brief below", check:()=>dir("lab02") && match("lab02/notes.txt", /^Linux is a kernel$/m) && match("lab02/notes.txt", /^Bash is a shell$/m) && match("lab02/notes.txt", /^Everything is a file$/m) },
+    { text:"Append a fourth line, <code>Paths are case sensitive</code>, without losing the first three", check:()=>match("lab02/notes.txt", /^Paths are case sensitive$/m) && nlines("lab02/notes.txt") === 4 },
+    { text:"Save the first 10 lines of <code>/etc/passwd</code> to <code>lab02/users-head.txt</code>", check:()=>nlines("lab02/users-head.txt") === 10 && match("lab02/users-head.txt", /^root:/m) },
+    { text:"Save the line count of <code>/etc/passwd</code> to <code>lab02/users-count.txt</code> — the number with no filename beside it", check:()=>{ const t = read("lab02/users-count.txt"); return t !== null && new RegExp("^\\s*" + lines(PASSWD).length + "\\s*$").test(t.trim()); } }
+  ],
+  brief:"Linux is a kernel\nBash is a shell\nEverything is a file",
+  hints:[ "Three <code>echo</code> lines works: the first with <code>&gt;</code>, the next two with <code>&gt;&gt;</code>. Or use a heredoc.",
+          "Task 2 must use <code>&gt;&gt;</code>. If the check for task 1 suddenly goes red, you used <code>&gt;</code> and wiped the file.",
+          "Task 4: <code>wc -l file</code> prints the count <em>and</em> the name. Feed the file in on stdin instead — <code>wc -l &lt; file</code> — and you get only the number." ],
+  solution:["mkdir lab02",'echo "Linux is a kernel" > lab02/notes.txt','echo "Bash is a shell" >> lab02/notes.txt','echo "Everything is a file" >> lab02/notes.txt','echo "Paths are case sensitive" >> lab02/notes.txt',"head -n 10 /etc/passwd > lab02/users-head.txt","wc -l < /etc/passwd > lab02/users-count.txt"]
+},
+{
+  id:3, title:"Scaffold a project", sub:"mkdir -p · brace expansion · tree",
+  intro:"Laying out a new project by hand is the single most common thing you will do in a terminal. Done well it is one command; done badly it is twenty.",
+  body:[
+    { h:"Parents for free", p:"Plain <code>mkdir</code> fails if the parent does not exist yet. <code>-p</code> creates the whole chain, and does not complain if it is already there — which is why it is safe inside scripts.",
+      cmds:[ c("mkdir -p demo/src/components","three levels, one command"), c("mkdir -p demo/src/components","run it twice — no error"), c("tree demo","") ] },
+    { h:"Brace expansion", p:"<code>{a,b,c}</code> is pure text substitution done by the shell before the command runs. <code>mkdir -p site/{css,js,img}</code> is really three arguments. It nests, too.",
+      cmds:[ c("mkdir -p site/{css,js,img}",""), c("tree site",""), c("mkdir -p app/{src/{lib,ui},tests}","nested"), c("tree app","") ] },
+    { h:"Seeing what you built", p:"<code>tree</code> draws the shape. <code>-a</code> includes dot files, which matters when your scaffold has a <code>.gitignore</code> in it.",
+      cmds:[ c("tree -a site",""), c("ls -R site","the same thing without tree") ] }
+  ],
+  tasks:[
+    { text:"Build every directory of the <code>webapp</code> tree shown below", check:()=>["webapp","webapp/src","webapp/src/css","webapp/src/js","webapp/assets","webapp/assets/images","webapp/assets/fonts","webapp/tests","webapp/docs"].every(dir) },
+    { text:"Create the three empty files under <code>src/</code>: <code>index.html</code>, <code>css/style.css</code>, <code>js/main.js</code>", check:()=>["webapp/src/index.html","webapp/src/css/style.css","webapp/src/js/main.js"].every(p=>isFile(resolve(p,HOME))) },
+    { text:"<code>webapp/README.md</code> starts with the line <code># WebApp</code>", check:()=>match("webapp/README.md", /^# WebApp/) },
+    { text:"<code>webapp/.gitignore</code> has a line reading <code>node_modules/</code>", check:()=>match("webapp/.gitignore", /^node_modules\/$/m) },
+    { text:"<code>webapp/docs/setup.md</code> mentions <code>Installation</code>", check:()=>match("webapp/docs/setup.md", /Installation/) }
+  ],
+  tree:"webapp/\n├── .gitignore\n├── README.md\n├── src/\n│   ├── index.html\n│   ├── css/style.css\n│   └── js/main.js\n├── assets/\n│   ├── images/\n│   └── fonts/\n├── tests/\n└── docs/setup.md",
+  hints:[ "All nine directories fit in one <code>mkdir -p</code> with braces: <code>webapp/{src/{css,js},assets/{images,fonts},tests,docs}</code>.",
+          "<code>touch</code> takes several paths at once.",
+          "A leading dot only hides a file from plain <code>ls</code>; creating <code>.gitignore</code> is no different from any other file." ],
+  solution:["mkdir -p webapp/{src/{css,js},assets/{images,fonts},tests,docs}","touch webapp/src/index.html webapp/src/css/style.css webapp/src/js/main.js",'echo "# WebApp" > webapp/README.md','echo "node_modules/" > webapp/.gitignore','echo "## Installation" > webapp/docs/setup.md',"tree -a webapp"]
+},
+{
+  id:4, title:"Copy, move, rename", sub:"cp · cp -r · mv",
+  intro:"<code>mv</code> is both move and rename — the same operation, seen from two angles. Both <code>cp</code> and <code>mv</code> will overwrite an existing file without a word of warning.",
+  body:[
+    { h:"Copying", p:"Directories need <code>-r</code>. Without it <code>cp</code> refuses and tells you why.",
+      cmds:[ c("cp /etc/hosts hosts.bak","file to file"), c("cp -r webapp demo-copy","whole tree"), c("ls demo-copy","") ] },
+    { h:"Moving and renaming", p:"Same command. If the destination is an existing directory you move into it; otherwise you rename.",
+      cmds:[ c("mv hosts.bak hosts.old","rename"), c("mkdir -p attic",""), c("mv hosts.old attic/","move into a directory"), c("ls attic","") ] },
+    { h:"Where it bites", p:"<code>cp -r src dest</code> behaves differently depending on whether <code>dest</code> already exists: if it does you get <code>dest/src</code>, if it does not you get <code>dest</code> as a copy of <code>src</code>.",
+      aside:"Run <code>ls</code> straight after every <code>cp -r</code> and <code>mv</code> until checking is reflex. It takes one second and saves whole afternoons." }
+  ],
+  tasks:[
+    { text:"Make a full recursive copy of <code>webapp</code> called <code>webapp-backup</code>", check:()=>dir("webapp-backup") && has("webapp-backup/README.md") && dir("webapp-backup/src/css") },
+    { text:"Rename <code>webapp/src/js/main.js</code> to <code>app.js</code>", check:()=>!has("webapp/src/js/main.js") && (has("webapp/src/js/app.js") || has("webapp/src/scripts/app.js")) },
+    { text:"Create <code>utils.js</code> and <code>api.js</code> beside it, then move all three into a new <code>webapp/src/scripts/</code>", check:()=>["app.js","utils.js","api.js"].every(f2 => has("webapp/src/scripts/" + f2)) },
+    { text:"Leave <code>webapp/src/js/</code> in place but empty", check:()=>{ const n = getNode(resolve("webapp/src/js", HOME)); return !!n && n.t === "d" && Object.keys(n.children).length === 0; } },
+    { text:"Copy <code>webapp/README.md</code> into <code>webapp/docs/</code>, keeping the original", check:()=>has("webapp/docs/README.md") && has("webapp/README.md") }
+  ],
+  hints:[ "Task 3: make the target directory first, then <code>mv webapp/src/js/*.js webapp/src/scripts/</code> moves all three in one go.",
+          "Task 4 is why you use <code>mv</code> for the files and never touch the directory itself.",
+          "Task 5 says keep the original, so that is <code>cp</code>, not <code>mv</code>." ],
+  solution:["cp -r webapp webapp-backup","mv webapp/src/js/main.js webapp/src/js/app.js","touch webapp/src/js/utils.js webapp/src/js/api.js","mkdir -p webapp/src/scripts","mv webapp/src/js/*.js webapp/src/scripts/","cp webapp/README.md webapp/docs/","tree webapp/src"]
+},
+{
+  id:5, title:"Delete without regret", sub:"rm · rm -r · rmdir",
+  intro:"There is no recycle bin. <code>rm</code> unlinks the data and the shell returns to the prompt as if nothing happened. Three habits make this safe.",
+  body:[
+    { h:"The three commands", p:"",
+      cmds:[ c("ls lab05","a pile of junk has been set up for you"), c("rm lab05/junk.txt","one file"), c("rmdir lab05/scratch-empty","only works when empty — a free safety net"), c("rm -r lab05/scratch","directory and everything under it") ] },
+    { h:"Look before you delete", p:"Run <code>ls</code> with exactly the glob you are about to hand to <code>rm</code>. What <code>ls</code> prints is precisely what will be destroyed.",
+      cmds:[ c("ls lab05/*.tmp","rehearse"), c("ls lab05/*.txt","note which files do and don't match") ],
+      aside:"Second habit: never let a space creep into <code>rm -rf /path/to/dir</code>. Third: reach for <code>rmdir</code> whenever you believe a directory is empty. If it refuses, your belief was wrong and it just saved you." }
+  ],
+  tasks:[
+    { text:"Delete every <code>.tmp</code> file in <code>lab05/</code>", check:()=>["a.tmp","b.tmp","c.tmp"].every(f2 => !has("lab05/" + f2)) },
+    { text:"Leave <code>lab05/keep.tmp.txt</code> alone — it is not a <code>.tmp</code> file", check:()=>has("lab05/keep.tmp.txt") },
+    { text:"Remove <code>lab05/cache/</code> and everything inside it", check:()=>!has("lab05/cache") },
+    { text:"Remove <code>lab05/empty/</code> with the command that would have refused had it held anything", check:()=>!has("lab05/empty") },
+    { text:"Leave <code>lab05/important.txt</code> and <code>lab05/logs/</code> untouched", check:()=>has("lab05/important.txt") && has("lab05/logs/old.log") }
+  ],
+  setup:()=>{
+    mkdirp(HOME + "/lab05/cache/sub"); mkdirp(HOME + "/lab05/empty"); mkdirp(HOME + "/lab05/logs");
+    mkdirp(HOME + "/lab05/scratch-empty"); mkdirp(HOME + "/lab05/scratch");
+    writeFile(HOME + "/lab05/scratch/throwaway.txt", "practice\n");
+    ["a.tmp","b.tmp","c.tmp"].forEach(n => writeFile(HOME + "/lab05/" + n, "scratch\n"));
+    writeFile(HOME + "/lab05/keep.tmp.txt", "do not delete me\n");
+    writeFile(HOME + "/lab05/junk.txt", "throwaway\n");
+    writeFile(HOME + "/lab05/important.txt", "the only copy\n");
+    writeFile(HOME + "/lab05/cache/data.bin", "cached\n");
+    writeFile(HOME + "/lab05/cache/sub/more.bin", "cached\n");
+    writeFile(HOME + "/lab05/logs/old.log", "old log line\n");
+  },
+  hints:[ "The glob <code>*.tmp</code> anchors to the end of the name, so <code>keep.tmp.txt</code> does not match. Confirm with <code>ls lab05/*.tmp</code> before deleting.",
+          "<code>cache/</code> has files in it, so <code>rmdir</code> will refuse — that is the recursive case.",
+          "<code>empty/</code> is the <code>rmdir</code> case. Using <code>rm -r</code> there would also work, which is exactly why it is the weaker habit." ],
+  solution:["ls lab05/*.tmp","rm lab05/*.tmp","rm -r lab05/cache","rmdir lab05/empty","ls -a lab05"]
+},
+{
+  id:6, title:"Find files, search text", sub:"find · grep",
+  intro:"The two are constantly confused. <strong>find matches names. grep matches lines inside files.</strong> Hold onto that and the flags sort themselves out.",
+  body:[
+    { h:"find — by name", p:"Quote the pattern, or the shell expands it before <code>find</code> ever sees it.",
+      cmds:[ c('find lab06 -name "*.log"',"by name"), c("find lab06 -type d","directories only"), c('find lab06 -type f -name "*.js"',"combine"), c("find /etc -maxdepth 1 -type f","stop descending") ] },
+    { h:"grep — inside files", p:"",
+      cmds:[ c("grep ERROR lab06/logs/app.log","plain match"), c("grep -i error lab06/logs/app.log","ignore case"), c("grep -c INFO lab06/logs/app.log","count instead of print"), c("grep -v INFO lab06/logs/app.log","invert: everything else"), c("grep -n TODO lab06/src/main.js","with line numbers"), c("grep -rn TODO lab06/src/utils","recurse a whole tree") ] },
+    { h:"Reading grep output", p:"With <code>-r</code> across several files, each line is prefixed <code>path:</code>. Add <code>-n</code> and it becomes <code>path:line:</code> — the format every editor can jump straight to." }
+  ],
+  tasks:[
+    { text:"Create <code>lab06/out/</code> and list the paths of every <code>.log</code> file under <code>lab06</code> into <code>lab06/out/logs.txt</code>", check:()=>match("lab06/out/logs.txt", /app\.log/) && match("lab06/out/logs.txt", /old\.log/) },
+    { text:"Put the <code>ERROR</code> lines from <code>lab06/logs/app.log</code> into <code>lab06/out/errors.txt</code> — those lines only", check:()=>nlines("lab06/out/errors.txt") === 3 && !match("lab06/out/errors.txt", /INFO|WARN/) },
+    { text:"Put the <em>count</em> of <code>WARN</code> lines into <code>lab06/out/warn-count.txt</code>", check:()=>match("lab06/out/warn-count.txt", /^\s*3\s*$/) },
+    { text:"Search <code>lab06/src/</code> recursively for <code>TODO</code>, with filename and line number, into <code>lab06/out/todos.txt</code>", check:()=>match("lab06/out/todos.txt", /main\.js:\d+:/) && nlines("lab06/out/todos.txt") === 3 }
+  ],
+  setup:()=>{
+    mkdirp(HOME + "/lab06/logs"); mkdirp(HOME + "/lab06/src/utils"); mkdirp(HOME + "/lab06/archive");
+    writeFile(HOME + "/lab06/logs/app.log",
+"2026-09-10 INFO server started on port 8080\n2026-09-10 WARN config file missing, using defaults\n2026-09-10 ERROR database connection refused\n2026-09-10 INFO retrying connection\n2026-09-10 ERROR database connection refused\n2026-09-11 INFO connection established\n2026-09-11 WARN slow query detected 2.4s\n2026-09-11 ERROR timeout on /api/users\n2026-09-11 INFO request completed\n2026-09-11 WARN memory usage at 87 percent\n");
+    writeFile(HOME + "/lab06/archive/old.log", "2026-08-01 INFO archived entry\n2026-08-01 ERROR archived failure\n");
+    writeFile(HOME + "/lab06/src/main.js", 'function main() {\n  // TODO: handle empty input\n  console.log("running");\n}\n');
+    writeFile(HOME + "/lab06/src/utils/helpers.js", "export function slugify(s) {\n  // TODO: strip accents\n  return s.toLowerCase();\n}\n");
+    writeFile(HOME + "/lab06/src/style.css", "body { margin: 0; } /* TODO: add dark mode */\n");
+  },
+  hints:[ "Redirection will not create a missing directory — <code>mkdir -p lab06/out</code> first.",
+          "Task 3 has a dedicated grep flag. You do not need <code>wc</code>.",
+          "Task 4 needs two grep flags at once, and a directory as the target." ],
+  solution:["mkdir -p lab06/out",'find lab06 -type f -name "*.log" > lab06/out/logs.txt',"grep ERROR lab06/logs/app.log > lab06/out/errors.txt","grep -c WARN lab06/logs/app.log > lab06/out/warn-count.txt","grep -rn TODO lab06/src > lab06/out/todos.txt","cat lab06/out/todos.txt"]
+},
+{
+  id:7, title:"Permissions", sub:"chmod · modes · executables",
+  intro:"Every file carries nine permission bits: read, write and execute, for owner, group and everyone else. Read them off the left-hand column of <code>ls -l</code>.",
+  body:[
+    { h:"Reading the column", p:"<code>-rwxr-xr--</code> breaks into four pieces: type, then owner <code>rwx</code>, group <code>r-x</code>, others <code>r--</code>. A <code>d</code> in front means directory, <code>l</code> means symlink.",
+      cmds:[ c("ls -l /etc/passwd",""), c("ls -l /etc/shadow","note the tighter mode"), c("ls -ld /etc","a directory's own mode") ] },
+    { h:"Numeric modes", p:"r=4, w=2, x=1, summed per class. Four combinations cover almost everything you will do.",
+      table:[["644","owner read/write, everyone reads","ordinary file"],["755","owner everything, others read and run","scripts, directories"],["600","owner only","keys, secrets, .env"],["700","owner only, fully","private directories"]] },
+    { h:"Changing them", p:"Numeric sets all nine bits at once. Symbolic adjusts what is already there.",
+      cmds:[ c("touch demo.sh",""), c("chmod 755 demo.sh",""), c("ls -l demo.sh",""), c("chmod 600 demo.sh","tighten"), c("chmod u+x demo.sh","symbolic: add execute for the owner"), c("ls -l demo.sh","") ] },
+    { h:"Making a script run", p:"A script needs two things: a shebang line naming its interpreter, and the execute bit. Then you run it by path.",
+      aside:"On a directory, <code>x</code> does not mean execute — it means you may enter and traverse it. A directory with <code>r</code> but no <code>x</code> lets you list the names inside and read nothing." }
+  ],
+  tasks:[
+    { text:"Create the directory <code>lab07</code>, and in it <code>backup.sh</code> starting with <code>#!/bin/bash</code> and containing an <code>echo</code>", check:()=>match("lab07/backup.sh", /^#!\/bin\/bash/) && match("lab07/backup.sh", /echo/) },
+    { text:"Give it mode <code>755</code>", check:()=>mode("lab07/backup.sh") === "755" },
+    { text:"Run it — <code>./lab07/backup.sh</code> should print your message", check:()=>ranScripts.has(resolve("lab07/backup.sh", HOME)) },
+    { text:"Create <code>lab07/secrets.env</code> with mode <code>600</code>", check:()=>has("lab07/secrets.env") && mode("lab07/secrets.env") === "600" },
+    { text:"Create the directory <code>lab07/private</code> with mode <code>700</code>", check:()=>dir("lab07/private") && mode("lab07/private") === "700" },
+    { text:"Save a long listing of <code>lab07</code> to <code>lab07/perms.txt</code>", check:()=>match("lab07/perms.txt", /backup\.sh/) && match("lab07/perms.txt", /^-rwx/m) }
+  ],
+  hints:[ "Make the directory first — <code>mkdir -p lab07/private</code> covers both it and task 5. Redirection never creates a missing directory. Then the tidiest way to write a two-line script is a heredoc: <code>cat &gt; lab07/backup.sh &lt;&lt;'EOF'</code>, the two lines, then <code>EOF</code> on its own.",
+          "600 is 4+2 for the owner and nothing for anyone else.",
+          "<code>chmod</code> treats directories exactly like files — <code>chmod 700 lab07/private</code>." ],
+  solution:["mkdir -p lab07/private","cat > lab07/backup.sh <<'EOF'","#!/bin/bash",'echo "Backing up project files..."',"EOF","chmod 755 lab07/backup.sh","./lab07/backup.sh","touch lab07/secrets.env","chmod 600 lab07/secrets.env","chmod 700 lab07/private","ls -l lab07 > lab07/perms.txt","cat lab07/perms.txt"]
+},
+{
+  id:8, title:"Links, sizes, archives", sub:"ln -s · du · tar",
+  intro:"Three unrelated tools that turn up together constantly: pointing at a file from somewhere else, finding out what is eating your disk, and bundling a directory for transport.",
+  body:[
+    { h:"Symlinks", p:"A symlink is a small file holding a path. It breaks if the target moves, which is a feature — you can see that it broke.",
+      cmds:[ c("ln -s /etc/passwd users-link","create"), c("ls -l users-link","the arrow shows the target"), c("cat users-link","reads through to the target"), c("readlink -f users-link","resolve it") ] },
+    { h:"Disk usage", p:"<code>du</code> measures directories; <code>df</code> measures whole filesystems. <code>du -sh</code> on each subdirectory is the standard opening move when a disk fills up.",
+      cmds:[ c("du -sh webapp","one total, human readable"), c("du -h webapp","every directory inside"), c("df -h","free space per filesystem") ] },
+    { h:"Archives", p:"<code>tar</code> bundles many files into one; <code>-z</code> runs the result through gzip. The three modes you need are create, list and extract.",
+      cmds:[ c("tar -czf webapp.tar.gz webapp","c = create, z = gzip, f = file"), c("file webapp.tar.gz","confirm what it is"), c("tar -tzf webapp.tar.gz","t = tell me, without extracting"), c("mkdir -p unpacked",""), c("tar -xzf webapp.tar.gz -C unpacked","x = extract, -C = into this directory"), c("tree unpacked","") ],
+      aside:"Mnemonic for the three modes: <strong>c</strong>reate, <strong>t</strong>ell me, e<strong>x</strong>tract. The <code>f</code> always comes last because the filename follows it." }
+  ],
+  tasks:[
+    { text:"Create <code>lab08/webapp.tar.gz</code>, a gzip archive of your <code>webapp</code> directory", check:()=>{ const m = tarMembers("lab08/webapp.tar.gz"); return !!m && m.some(x => /webapp/.test(x)); } },
+    { text:"Write the archive's contents listing to <code>lab08/contents.txt</code> without extracting it", check:()=>match("lab08/contents.txt", /webapp/) && nlines("lab08/contents.txt") > 5 },
+    { text:"Extract the archive into <code>lab08/restored/</code>", check:()=>dir("lab08/restored/webapp") && has("lab08/restored/webapp/README.md") },
+    { text:"Make <code>lab08/current</code> a symlink pointing at the restored <code>webapp</code>", check:()=>link("lab08/current") && !!getNode(resolve("lab08/current", HOME)) },
+    { text:"Save the human-readable total size of <code>webapp</code> to <code>lab08/size.txt</code>", check:()=>match("lab08/size.txt", /^\s*\d+(\.\d)?[KM]?\s+\S*webapp/m) }
+  ],
+  hints:[ "<code>mkdir -p lab08/restored</code> first — neither <code>tar</code> nor <code>&gt;</code> will create directories for you.",
+          "Task 2 is <code>-tzf</code> redirected into the file.",
+          "Task 4: the target is <code>restored/webapp</code>, and the link is easiest to create from inside <code>lab08</code>.",
+          "Task 5 wants <code>-s</code> and <code>-h</code> on <code>du</code> together." ],
+  solution:["mkdir -p lab08/restored","tar -czf lab08/webapp.tar.gz webapp","tar -tzf lab08/webapp.tar.gz > lab08/contents.txt","tar -xzf lab08/webapp.tar.gz -C lab08/restored","ln -s restored/webapp lab08/current","du -sh webapp > lab08/size.txt","ls -l lab08"]
+},
+{
+  id:9, title:"Pipes and redirection", sub:"| · 2>&1 · tee · sort | uniq -c",
+  intro:"Every process gets three streams: input, output, and errors. Wiring them together is what turns a handful of small commands into something that would otherwise need a script.",
+  body:[
+    { h:"The three streams", p:"stdout is 1, stderr is 2. They are separate, which is why errors still appear on screen when you redirect output to a file.",
+      cmds:[ c("ls /etc nowhere","one succeeds, one fails"), c("ls /etc nowhere > out.txt","errors still reach the screen"), c("ls /etc nowhere > out.txt 2>&1","send errors to the same place"), c("ls /etc nowhere 2>/dev/null","discard the errors") ],
+      aside:"Order matters: <code>&gt; file 2&gt;&amp;1</code> works, <code>2&gt;&amp;1 &gt; file</code> does not. Read it as \"point stdout at the file, then point stderr wherever stdout is now pointing.\"" },
+    { h:"Pipes", p:"A pipe connects one command's output to the next one's input. No temporary files, no cleanup.",
+      cmds:[ c("cat /etc/passwd | wc -l",""), c("cut -d: -f1 /etc/passwd","first colon-separated field"), c("cut -d: -f1 /etc/passwd | sort","then sort it"), c("awk '{print $2}' lab06/logs/app.log","second whitespace field") ] },
+    { h:"Counting things", p:"<code>uniq</code> only collapses <em>adjacent</em> duplicates, so it is always preceded by <code>sort</code>. The three-command idiom below is worth memorising outright.",
+      cmds:[ c("cut -d: -f7 /etc/passwd | sort | uniq -c","count each login shell"), c("cut -d: -f7 /etc/passwd | sort | uniq -c | sort -rn","most frequent first") ] },
+    { h:"tee", p:"<code>tee</code> writes the stream to a file and passes it along, so you can save an intermediate result without breaking the pipeline.",
+      cmds:[ c("grep ERROR lab06/logs/app.log | tee saved.txt | wc -l","") ] }
+  ],
+  tasks:[
+    { text:"Create <code>lab09</code>, and in <code>lab09/levels.txt</code> list each log level in <code>lab06/logs/app.log</code> with its count, most frequent first", check:()=>match("lab09/levels.txt", /^\s*4 INFO/m) && match("lab09/levels.txt", /^\s*3 WARN/m) && match("lab09/levels.txt", /^\s*3 ERROR/m) && /INFO/.test((read("lab09/levels.txt")||"").split("\n")[0]) },
+    { text:"Run <code>ls lab06 nowhere</code> and capture <em>both</em> its output and its error into <code>lab09/both.txt</code>", check:()=>match("lab09/both.txt", /logs/) && match("lab09/both.txt", /No such file/) },
+    { text:"In one pipeline with <code>tee</code>: <code>ERROR</code> lines into <code>lab09/errors.txt</code>, their count into <code>lab09/error-count.txt</code>", check:()=>nlines("lab09/errors.txt") === 3 && match("lab09/error-count.txt", /^\s*3\s*$/) },
+    { text:"Put the usernames from <code>/etc/passwd</code>, sorted alphabetically, into <code>lab09/usernames.txt</code>", check:()=>{ const t = read("lab09/usernames.txt"); if(t === null) return false; const L2 = lines(t); return L2.length === lines(PASSWD).length && L2.includes("root") && L2.join() === L2.slice().sort().join(); } }
+  ],
+  hints:[ "Task 1 is the four-stage idiom from the walkthrough: <code>awk</code> the second field, <code>sort</code>, <code>uniq -c</code>, then <code>sort -rn</code>.",
+          "Task 2: <code>&gt; lab09/both.txt 2&gt;&amp;1</code>, in that order.",
+          "Task 3: <code>grep ERROR ... | tee lab09/errors.txt | wc -l &gt; lab09/error-count.txt</code>.",
+          "Task 4: <code>cut -d: -f1</code> pulls the username, then <code>sort</code>." ],
+  solution:["mkdir -p lab09","awk '{print $2}' lab06/logs/app.log | sort | uniq -c | sort -rn > lab09/levels.txt","ls lab06 nowhere > lab09/both.txt 2>&1","grep ERROR lab06/logs/app.log | tee lab09/errors.txt | wc -l > lab09/error-count.txt","cut -d: -f1 /etc/passwd | sort > lab09/usernames.txt","cat lab09/levels.txt"]
+},
+{
+  id:10, title:"Final challenge", sub:"everything, no walkthrough",
+  intro:"No new commands and no worked examples this time. Read the brief, work out the commands, watch the checklist. If you stall, the hints nudge without answering.",
+  body:[
+    { h:"The brief", p:"You are setting up a small deployment tool called <code>shipit</code>. Build it in your home directory so that every requirement below holds." },
+    { h:"Structure", p:"", tree:"shipit/\n├── README.md\n├── .gitignore\n├── summary.txt\n├── latest -> release/shipit-v1.tar.gz\n├── bin/shipit.sh\n├── config/\n│   ├── production.env\n│   └── staging.env\n├── lib/\n│   ├── deploy.sh\n│   └── rollback.sh\n├── logs/deploy.log\n└── release/shipit-v1.tar.gz" },
+    { h:"Requirements", p:"<strong>1.</strong> <code>README.md</code> begins <code># shipit</code>. &nbsp;<strong>2.</strong> <code>.gitignore</code> has lines <code>logs/</code> and <code>*.env</code>. &nbsp;<strong>3.</strong> <code>bin/shipit.sh</code> has a bash shebang, mode 755, and runs. &nbsp;<strong>4.</strong> Both <code>lib/*.sh</code> are 755. &nbsp;<strong>5.</strong> Both <code>config/*.env</code> are 600. &nbsp;<strong>6.</strong> <code>logs/deploy.log</code> has at least three lines, each carrying <code>INFO</code>, <code>WARN</code> or <code>ERROR</code>. &nbsp;<strong>7.</strong> The archive holds <code>bin</code>, <code>lib</code> and <code>config</code> but <em>not</em> <code>logs</code>. &nbsp;<strong>8.</strong> <code>latest</code> is a working symlink to the archive. &nbsp;<strong>9.</strong> <code>summary.txt</code> holds the count of ERROR lines in the log." }
+  ],
+  tasks:[
+    { text:"Directory tree complete: <code>bin</code>, <code>config</code>, <code>lib</code>, <code>logs</code>, <code>release</code>", check:()=>["shipit","shipit/bin","shipit/config","shipit/lib","shipit/logs","shipit/release"].every(dir) },
+    { text:"<code>README.md</code> and <code>.gitignore</code> as specified", check:()=>match("shipit/README.md", /^# shipit/) && match("shipit/.gitignore", /^logs\/$/m) && match("shipit/.gitignore", /^\*\.env$/m) },
+    { text:"<code>bin/shipit.sh</code> has a shebang, is mode 755, and has been run", check:()=>match("shipit/bin/shipit.sh", /^#!\/bin\/bash/) && mode("shipit/bin/shipit.sh") === "755" && ranScripts.has(resolve("shipit/bin/shipit.sh", HOME)) },
+    { text:"<code>lib/deploy.sh</code> and <code>lib/rollback.sh</code> are both 755", check:()=>mode("shipit/lib/deploy.sh") === "755" && mode("shipit/lib/rollback.sh") === "755" },
+    { text:"<code>config/production.env</code> and <code>config/staging.env</code> are both 600", check:()=>mode("shipit/config/production.env") === "600" && mode("shipit/config/staging.env") === "600" },
+    { text:"<code>logs/deploy.log</code> has 3+ levelled lines", check:()=>{ const t = read("shipit/logs/deploy.log"); return t !== null && lines(t).filter(l => /INFO|WARN|ERROR/.test(l)).length >= 3; } },
+    { text:"Archive contains bin, lib and config — and not logs", check:()=>{ const m = tarMembers("shipit/release/shipit-v1.tar.gz"); return !!m && m.some(x=>/bin/.test(x)) && m.some(x=>/lib/.test(x)) && m.some(x=>/config/.test(x)) && !m.some(x=>/logs/.test(x)); } },
+    { text:"<code>latest</code> is a symlink that resolves to the archive", check:()=>link("shipit/latest") && !!getNode(resolve("shipit/latest", HOME)) },
+    { text:"<code>summary.txt</code> holds the ERROR count", check:()=>{ const t = read("shipit/summary.txt"); if(t === null) return false; const log = read("shipit/logs/deploy.log") || ""; const n = lines(log).filter(l => /ERROR/.test(l)).length; return new RegExp("^\\s*" + n + "\\s*$").test(t.trim()) && n > 0; } }
+  ],
+  hints:[ "The whole tree is one <code>mkdir -p shipit/{bin,config,lib,logs,release}</code>.",
+          "Requirement 7: <code>tar</code> takes several sources at once — name <code>bin</code>, <code>lib</code> and <code>config</code> explicitly rather than archiving all of <code>shipit</code>. Check with <code>-tzf</code>.",
+          "Do the <code>chmod</code>s after creating the files; writing a file gives it a fresh default mode.",
+          "Requirement 9: <code>grep -c ERROR</code> prints just the number." ],
+  solution:["mkdir -p shipit/{bin,config,lib,logs,release}",'echo "# shipit" > shipit/README.md',"printf 'logs/\\n*.env\\n' > shipit/.gitignore","cat > shipit/bin/shipit.sh <<'EOF'","#!/bin/bash",'echo "shipit: starting deployment"',"EOF","printf '#!/bin/bash\\necho deploying\\n' > shipit/lib/deploy.sh","printf '#!/bin/bash\\necho rolling back\\n' > shipit/lib/rollback.sh",'echo "APP_ENV=production" > shipit/config/production.env','echo "APP_ENV=staging" > shipit/config/staging.env',"cat > shipit/logs/deploy.log <<'EOF'","2026-09-14 INFO deployment started","2026-09-14 WARN disk usage above 80 percent","2026-09-14 ERROR failed to reach node-3","2026-09-14 INFO deployment finished","EOF","cd shipit","tar -czf release/shipit-v1.tar.gz bin lib config","ln -s release/shipit-v1.tar.gz latest","chmod 755 bin/shipit.sh lib/deploy.sh lib/rollback.sh","chmod 600 config/production.env config/staging.env","./bin/shipit.sh","grep -c ERROR logs/deploy.log > summary.txt","cd ~","tree -a shipit"]
+}
+];
+
+/* ============================================================
+   PART 6 — lab state + shell-level lab commands
+   ============================================================ */
+const STATE = { lab: 0, done: {}, hintIdx: {} };
+
+function currentLab(){ return LABS[STATE.lab]; }
+
+function resetWorld(){
+  FS = baseFS();
+  cwd = HOME;
+  ranScripts = new Set();
+  for(let i = 0; i <= STATE.lab; i++) if(LABS[i].setup) LABS[i].setup();
+}
+
+function taskState(lab){
+  return lab.tasks.map(t => { try { return !!t.check(); } catch(e){ return false; } });
+}
+
+const UI_CMDS = {
+  check: () => { const r = doCheck(); return OK(r); },
+  hint: () => { showHint(); return OK(); },
+  solution: () => { showSolution(); return OK(); },
+  reset: () => { resetWorld(); renderTasks(); return OK("Workspace reset for lab " + currentLab().id + ".\n"); },
+  next: () => { if(STATE.lab < LABS.length - 1){ gotoLab(STATE.lab + 1); return OK(); } return OK("That was the last lab.\n"); },
+  labs: () => OK(LABS.map(l => (STATE.done[l.id] ? " ✓ " : "   ") + String(l.id).padStart(2) + "  " + l.title).join("\n") + "\n")
+};
+
+/* ============================================================
+   PART 7 — UI
+   ============================================================ */
+function initUI(){
+  const screen = document.getElementById("screen");
+  const manualBody = document.getElementById("manualBody");
+  const taskList = document.getElementById("taskList");
+  const stepsEl = document.getElementById("steps");
+  let entry, inputLine;
+
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function prompt(){
+    const p = cwd === HOME ? "~" : cwd.startsWith(HOME + "/") ? "~" + cwd.slice(HOME.length) : cwd;
+    document.getElementById("conTitle").textContent = "labex@sandbox: " + p;
+    return '<span class="ps1">labex@sandbox</span>:<span class="path">' + esc(p) + '</span>$ ';
+  }
+  function write(html, cls){
+    const div = document.createElement("div");
+    if(cls) div.className = cls;
+    div.innerHTML = html;
+    screen.insertBefore(div, inputLine);
+    screen.scrollTop = screen.scrollHeight;
+  }
+  function writeText(text, cls){ if(text !== "") write(esc(text.replace(/\n$/,"")), cls); }
+
+  function buildInput(){
+    inputLine = document.createElement("div");
+    inputLine.className = "inputline";
+    inputLine.innerHTML = '<span id="ps1slot">' + prompt() + '</span>';
+    entry = document.createElement("input");
+    entry.id = "entry"; entry.autocapitalize = "off"; entry.autocomplete = "off"; entry.spellcheck = false;
+    entry.setAttribute("aria-label", "terminal input");
+    inputLine.appendChild(entry);
+    screen.appendChild(inputLine);
+    entry.focus();
+  }
+  function refreshPrompt(){
+    document.getElementById("ps1slot").innerHTML = SESSION.heredoc ? "&gt; " : prompt();
+  }
+
+  let hIdx = -1;
+  function submit(raw){
+    write(document.getElementById("ps1slot").innerHTML + esc(raw));
+    entry.value = "";
+    if(!SESSION.heredoc && raw.trim() === ""){ refreshPrompt(); return; }
+    if(!SESSION.heredoc){ SESSION.history.push(raw); hIdx = SESSION.history.length; }
+
+    const res = feedLine(raw);
+    writeText(res.out);
+    writeText(res.err, "err");
+    refreshPrompt();
+    if(!res.pending) renderTasks();
+    screen.scrollTop = screen.scrollHeight;
+  }
+
+  screen.addEventListener("click", (e) => { if(!window.getSelection().toString()) entry.focus(); });
+  document.addEventListener("keydown", (e) => {
+    if(e.target !== entry && !e.metaKey && !e.ctrlKey && e.key.length === 1) entry.focus();
+  });
+
+  function onKey(e){
+    if(e.key === "Enter"){ e.preventDefault(); submit(entry.value); return; }
+    if(e.key === "ArrowUp"){ e.preventDefault(); if(hIdx > 0){ hIdx--; entry.value = SESSION.history[hIdx]; } return; }
+    if(e.key === "ArrowDown"){ e.preventDefault(); if(hIdx < SESSION.history.length - 1){ hIdx++; entry.value = SESSION.history[hIdx]; } else { hIdx = SESSION.history.length; entry.value = ""; } return; }
+    if(e.key === "Tab"){
+      e.preventDefault();
+      const parts = entry.value.split(/\s+/), last = parts[parts.length-1] || "";
+      const slash = last.lastIndexOf("/");
+      const dirPart = slash >= 0 ? last.slice(0, slash+1) : "";
+      const frag = slash >= 0 ? last.slice(slash+1) : last;
+      const node = getNode(resolve(dirPart || "."));
+      if(!node || node.t !== "d") return;
+      const cands = Object.keys(node.children).filter(k => k.startsWith(frag) && (frag[0] === "." || k[0] !== "."));
+      if(cands.length === 1){
+        const full = dirPart + cands[0] + (node.children[cands[0]].t === "d" ? "/" : " ");
+        parts[parts.length-1] = full;
+        entry.value = parts.join(" ");
+      } else if(cands.length > 1){
+        write(document.getElementById("ps1slot").innerHTML + esc(entry.value));
+        write(esc(cands.join("  ")));
+      }
+      return;
+    }
+    if(e.key === "l" && e.ctrlKey){ e.preventDefault(); screen.querySelectorAll("div:not(.inputline)").forEach(d => d.remove()); return; }
+    if(e.key === "c" && e.ctrlKey){ e.preventDefault(); write(document.getElementById("ps1slot").innerHTML + esc(entry.value) + "^C"); entry.value = ""; SESSION.heredoc = null; refreshPrompt(); }
+  }
+
+  /* ---------- rendering ---------- */
+  function renderSteps(){
+    stepsEl.innerHTML = "";
+    LABS.forEach((l, i) => {
+      const b = document.createElement("button");
+      b.className = "step" + (i === STATE.lab ? " current" : "") + (STATE.done[l.id] ? " done" : "");
+      b.textContent = l.id;
+      b.title = l.title;
+      b.setAttribute("aria-label", "Lab " + l.id + ": " + l.title);
+      b.onclick = () => gotoLab(i);
+      stepsEl.appendChild(b);
+    });
+  }
+
+  function renderManual(){
+    const lab = currentLab();
+    let html = "<h1>" + lab.title + "</h1>" +
+      '<div class="lab-meta">lab ' + String(lab.id).padStart(2,"0") + " of 10 &nbsp;·&nbsp; " + lab.sub + "</div>" +
+      "<p>" + lab.intro + "</p>";
+    for(const sec of lab.body){
+      if(sec.h) html += "<h2>" + sec.h + "</h2>";
+      if(sec.p) html += "<p>" + sec.p + "</p>";
+      if(sec.table){
+        html += "<table><tr><th>Mode</th><th>Means</th><th>Used for</th></tr>";
+        for(const r of sec.table) html += "<tr><td><code>" + r[0] + "</code></td><td>" + r[1] + "</td><td>" + r[2] + "</td></tr>";
+        html += "</table>";
+      }
+      if(sec.cmds){
+        html += '<div class="cmds">';
+        for(const cc of sec.cmds)
+          html += '<button class="cmd" data-run="' + cc.cmd.replace(/"/g,"&quot;") + '"><span class="c">' +
+            cc.cmd.replace(/&/g,"&amp;").replace(/</g,"&lt;") + '</span>' + (cc.note ? '<span class="note">' + cc.note + "</span>" : "") + "</button>";
+        html += "</div>";
+      }
+      if(sec.tree) html += '<div class="tree">' + sec.tree + "</div>";
+      if(sec.aside) html += '<div class="aside">' + sec.aside + "</div>";
+    }
+    if(lab.tree) html += "<h2>Build this</h2><div class=\"tree\">" + lab.tree + "</div>";
+    if(lab.brief) html += "<h2>The three lines</h2><div class=\"tree\">" + lab.brief + "</div>";
+    manualBody.innerHTML = html;
+    manualBody.scrollTop = 0;
+    manualBody.querySelectorAll(".cmd").forEach(btn => {
+      btn.onclick = () => {
+        const cmd = btn.getAttribute("data-run");
+        entry.focus();
+        if(/<<'?[A-Za-z]/.test(cmd)){ entry.value = cmd; return; }
+        submit(cmd);
+      };
+    });
+  }
+
+  function renderTasks(){
+    const lab = currentLab(), st = taskState(lab);
+    taskList.innerHTML = "";
+    lab.tasks.forEach((t, i) => {
+      const d = document.createElement("div");
+      d.className = "task" + (st[i] ? " done" : "");
+      d.innerHTML = '<span class="box"></span><span>' + t.text + "</span>";
+      taskList.appendChild(d);
+    });
+    if(st.every(Boolean) && !STATE.done[lab.id]){
+      STATE.done[lab.id] = true;
+      renderSteps();
+      write('<span class="good">✓ All ' + lab.tasks.length + " tasks for lab " + lab.id + " complete." +
+        (STATE.lab < LABS.length - 1 ? " Type `next` or use the button to continue." : " That is the whole path — well done.") + "</span>");
+    }
+    if(!st.every(Boolean) && STATE.done[lab.id]){ STATE.done[lab.id] = false; renderSteps(); }
+    document.getElementById("btnNext").disabled = STATE.lab >= LABS.length - 1;
+  }
+  window.renderTasks = renderTasks;
+
+  function doCheck(){
+    const lab = currentLab(), st = taskState(lab);
+    const passed = st.filter(Boolean).length;
+    let out = "";
+    lab.tasks.forEach((t, i) => {
+      const plain = t.text.replace(/<[^>]+>/g, "");
+      out += (st[i] ? "  PASS  " : "  FAIL  ") + plain + "\n";
+    });
+    out += "\n  " + passed + " of " + st.length + " complete.";
+    out += passed === st.length ? "  Lab " + lab.id + " done.\n" : "  Try `hint` if you are stuck.\n";
+    return out;
+  }
+  window.doCheck = doCheck;
+
+  function showHint(){
+    const lab = currentLab();
+    const i = STATE.hintIdx[lab.id] || 0;
+    if(i >= lab.hints.length){ write('<span class="sys">No more hints — try `solution`.</span>'); return; }
+    write('<span class="warnc">hint ' + (i+1) + "/" + lab.hints.length + ":</span> " + lab.hints[i].replace(/<\/?code>/g, "`").replace(/<\/?strong>/g,"").replace(/<\/?em>/g,""), "sys");
+    STATE.hintIdx[lab.id] = i + 1;
+  }
+  window.showHint = showHint;
+
+  function showSolution(){
+    const lab = currentLab();
+    write('<span class="warnc">Solution for lab ' + lab.id + " — read it, then type it yourself:</span>");
+    lab.solution.forEach(l => write("  " + esc(l)));
+    write('<span class="sys">Type these in, or press Reset lab to start clean.</span>');
+  }
+  window.showSolution = showSolution;
+
+  function gotoLab(i){
+    STATE.lab = i;
+    const lab = currentLab();
+    if(lab.setup) lab.setup();
+    renderSteps(); renderManual(); renderTasks();
+    write('<span class="sys">── lab ' + lab.id + ": " + lab.title + " ──</span>");
+    screen.scrollTop = screen.scrollHeight;
+    entry.focus();
+  }
+  window.gotoLab = gotoLab;
+
+  /* buttons */
+  document.getElementById("btnCheck").onclick = () => { write(prompt() + "check"); writeText(doCheck()); screen.scrollTop = screen.scrollHeight; entry.focus(); };
+  document.getElementById("btnHint").onclick = () => { showHint(); entry.focus(); };
+  document.getElementById("btnSolution").onclick = () => { showSolution(); entry.focus(); };
+  document.getElementById("btnReset").onclick = () => { resetWorld(); renderTasks(); write('<span class="sys">Workspace reset.</span>'); entry.focus(); };
+  document.getElementById("btnNext").onclick = () => { if(STATE.lab < LABS.length - 1) gotoLab(STATE.lab + 1); };
+  document.getElementById("btnHelp").onclick = () => { write(prompt() + "help"); writeText(CMDS.help().out); entry.focus(); };
+
+  /* boot */
+  resetWorld();
+  buildInput();
+  entry.addEventListener("keydown", onKey);
+  write('<span class="sys">Ubuntu 22.04 sandbox. Everything here is simulated in your browser — nothing touches your real machine.</span>');
+  write('<span class="sys">Click any command in the manual to run it. Tab completes paths, ↑ recalls history, `help` lists what works.</span>');
+  renderSteps(); renderManual(); renderTasks();
+  write('<span class="sys">── lab 1: ' + LABS[0].title + " ──</span>");
+}
+
+if(typeof document !== "undefined") initUI();
+else { module.exports = { resetWorld, runLine, feedLine, LABS, STATE, taskState, resolve, HOME, get cwd(){ return cwd; } }; }
+</script>
+</body>
+</html>
+
