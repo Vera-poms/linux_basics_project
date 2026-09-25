@@ -32,6 +32,7 @@ export default function App() {
   const shellApi = useShell();
   const consoleRef = useRef<InputLineHandle>(null);
   const bootedRef = useRef(false);
+  const suppressNextUncompleteRef = useRef(false);
 
   const lab = LABS[currentLabIndex];
 
@@ -45,6 +46,7 @@ export default function App() {
   useEffect(() => {
     if (bootedRef.current || isLoading) return;
     bootedRef.current = true;
+    suppressNextUncompleteRef.current = true;
     shellApi.resetFs(LABS.map((l) => l.setup), currentLabIndex);
     shellApi.pushLine("Ubuntu 22.04 sandbox. Everything here is simulated in your browser — nothing touches your real machine.", "sys");
     shellApi.pushLine("Click any command in the manual to run it. Tab completes paths, ↑ recalls history, `help` lists what works.", "sys");
@@ -66,7 +68,13 @@ export default function App() {
         "good"
       );
     } else if (!allDone && wasDone) {
-      markLabDone(lab.id, false);
+      if (suppressNextUncompleteRef.current) {
+        suppressNextUncompleteRef.current = false;
+      } else {
+        markLabDone(lab.id, false);
+      }
+    } else {
+      suppressNextUncompleteRef.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskKey]);
@@ -75,6 +83,7 @@ export default function App() {
     if (index < 0 || index >= LABS.length) return;
     gotoLab(index);
     const target = LABS[index];
+    suppressNextUncompleteRef.current = true;
     shellApi.runSetup(target.setup);
     shellApi.pushLine(`── lab ${target.id}: ${target.title} ──`, "sys");
     consoleRef.current?.focus();

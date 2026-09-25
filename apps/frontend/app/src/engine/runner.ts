@@ -40,7 +40,7 @@ export class Shell {
     this.users = new UserDB();
     this.cmds = createCommands(this.fs, this.session, this.users);
     this.syncUserFiles();
-    this.ranScripts = new Set();
+    this.ranScripts.clear();
     if (setup) setup();
   }
 

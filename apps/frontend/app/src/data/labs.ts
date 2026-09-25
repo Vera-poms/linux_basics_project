@@ -2,7 +2,7 @@ import { HOME, USR_BIN } from "../engine/filesystem";
 import type { Lab } from "./types";
 import {
   c, has, dir, read, mode, link, nlines, match, isFile, tarMembers, ranScript, PASSWD, lines,
-  owner, group, passwdEntry, groupEntry, inGroup, shadowUnlocked,
+  owner, group, passwdEntry, inGroup, shadowUnlocked,
 } from "./labHelpers";
 
 export const LABS: Lab[] = [
@@ -587,6 +587,21 @@ export const LABS: Lab[] = [
       "du -sh webapp > lab08/size.txt",
       "ls -l lab08",
     ],
+    setup: (fs) => {
+      if (fs.exists(HOME + "/webapp")) return;
+      fs.mkdirp(HOME + "/webapp/src/css");
+      fs.mkdirp(HOME + "/webapp/src/js");
+      fs.mkdirp(HOME + "/webapp/assets/images");
+      fs.mkdirp(HOME + "/webapp/assets/fonts");
+      fs.mkdirp(HOME + "/webapp/tests");
+      fs.mkdirp(HOME + "/webapp/docs");
+      fs.writeFile(HOME + "/webapp/src/index.html", "<!doctype html>\n<html></html>\n");
+      fs.writeFile(HOME + "/webapp/src/css/style.css", "body { margin: 0; }\n");
+      fs.writeFile(HOME + "/webapp/src/js/main.js", 'console.log("running");\n');
+      fs.writeFile(HOME + "/webapp/README.md", "# WebApp\n");
+      fs.writeFile(HOME + "/webapp/.gitignore", "node_modules/\n");
+      fs.writeFile(HOME + "/webapp/docs/setup.md", "## Installation\n");
+    },
   },
   {
     id: 9,
