@@ -35,15 +35,47 @@ export function ProgressProvider({ children, store }: { children: ReactNode; sto
     };
   }, [store]);
 
+  const inFlightRef = useRef(0);
+
   const persist = useCallback(
     (next: Progress) => {
       setProgress(next);
       // Fire-and-forget: a failed save just means it'll be retried on the next change.
       // A future retry/backoff layer can slot in behind ProgressStore without touching this.
-      void store.setProgress(next).catch((err) => console.error("Failed to save progress", err));
+      inFlightRef.current++;
+      void store
+        .setProgress(next)
+        .catch((err) => console.error("Failed to save progress", err))
+        .finally(() => {
+          inFlightRef.current--;
+        });
     },
     [store]
   );
+
+  // Keep the UI in sync with the backend: re-pull when the tab regains focus / periodically.
+  // Only done/hint data is merged — the current lab is left alone so the sandbox isn't pulled
+  // out from under the user.
+  useEffect(() => {
+    const sync = () => {
+      if (document.visibilityState !== "visible" || inFlightRef.current > 0) return;
+      store
+        .getProgress()
+        .then((remote) => {
+          if (inFlightRef.current > 0) return; // a local save started meanwhile; don't clobber it
+          setProgress((cur) => ({ ...cur, done: remote.done, hintIdx: remote.hintIdx }));
+        })
+        .catch(() => {});
+    };
+    const timer = window.setInterval(sync, 30000);
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [store]);
 
   const gotoLab = useCallback(
     (index: number) => {

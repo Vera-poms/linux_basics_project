@@ -1038,7 +1038,7 @@ export function createCommands(fs: FileSystem, session: ShellSession, users: Use
         "  archive    tar  gzip  gunzip\n" +
         "  shell      pipes |   redirection > >> 2> 2>&1 <   chaining && || ;\n" +
         "             globs *   braces {a,b}   heredoc <<'EOF'   history\n" +
-        "  lab        check   hint   solution   reset   next   labs\n\n" +
+        "  lab        check   hint   hint N   solution   reset   next   labs\n\n" +
         "Try `man ls` for a short page on any of the main commands.\n"
     );
 

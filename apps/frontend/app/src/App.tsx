@@ -27,7 +27,7 @@ function doCheckOutput(lab: (typeof LABS)[number], st: boolean[]): string {
 }
 
 export default function App() {
-  const { progress, currentLabIndex, isLoading, gotoLab, markLabDone, revealNextHint } = useProgress();
+  const { progress, currentLabIndex, isLoading, gotoLab, markLabDone } = useProgress();
   const { user, logout } = useAuth();
   const shellApi = useShell();
   const consoleRef = useRef<InputLineHandle>(null);
@@ -39,6 +39,12 @@ export default function App() {
   const ctx: LabCheckCtx = useMemo(() => ({ fs: shellApi.shell.fs, ranScripts: shellApi.shell.ranScripts }), [shellApi.shell]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const taskDone = useMemo(() => taskState(lab, ctx), [lab, shellApi.version]);
+  // The sandbox filesystem is rebuilt on every visit, but completion is persisted server-side:
+  // a lab the backend says is done shows fully ticked even before its tasks are re-run.
+  const displayTaskDone = useMemo(
+    () => (progress.done[lab.id] ? taskDone.map(() => true) : taskDone),
+    [progress.done, lab.id, taskDone]
+  );
 
   // Boot: reset the filesystem for the persisted lab and greet, once progress has actually loaded.
   // (currentLabIndex is a default 0 until the async progress fetch resolves — seeding before that
@@ -92,15 +98,27 @@ export default function App() {
   function runCheck() {
     shellApi.pushLine(doCheckOutput(lab, taskState(lab, ctx)));
   }
-  function runHint() {
-    const idx = progress.hintIdx[lab.id] || 0;
-    if (idx >= lab.hints.length) {
-      shellApi.pushLine("No more hints — try `solution`.", "sys");
+  // Hints belong to a single task: `hint` explains the first unfinished task, `hint N` explains task N.
+  function runHint(taskNumber?: number) {
+    const st = taskState(lab, ctx);
+    const idx = taskNumber !== undefined ? taskNumber - 1 : st.findIndex((done) => !done);
+    if (taskNumber !== undefined && (idx < 0 || idx >= lab.tasks.length)) {
+      shellApi.pushLine(`This lab has tasks 1 to ${lab.tasks.length}. Try \`hint 1\`.`, "sys");
       return;
     }
-    const text = lab.hints[idx].replace(/<\/?code>/g, "`").replace(/<\/?strong>/g, "").replace(/<\/?em>/g, "");
-    shellApi.pushLine(`hint ${idx + 1}/${lab.hints.length}: ${text}`, "warn");
-    revealNextHint(lab.id);
+    if (idx < 0) {
+      shellApi.pushLine("Every task in this lab is done. Type `next` to continue.", "good");
+      return;
+    }
+    const text = lab.tasks[idx].hint
+      .replace(/<br\s*\/?>/g, "\n")
+      .replace(/<\/?code>/g, "`")
+      .replace(/<\/?(strong|em)>/g, "")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"');
+    shellApi.pushLine(`hint for task ${idx + 1} of ${lab.tasks.length}:\n${text}`, "warn");
   }
   function runSolution() {
     shellApi.pushLine(`Solution for lab ${lab.id} — read it, then type it yourself:`, "warn");
@@ -130,6 +148,13 @@ export default function App() {
 
   function handleSubmit(raw: string) {
     const trimmed = raw.trim();
+    const hintN = /^hint\s+(\d+)$/.exec(trimmed);
+    if (!shellApi.isHeredoc() && hintN) {
+      shellApi.echoInput(raw);
+      shellApi.shell.session.history.push(raw);
+      runHint(parseInt(hintN[1], 10));
+      return;
+    }
     if (!shellApi.isHeredoc() && (META_COMMANDS as readonly string[]).includes(trimmed)) {
       shellApi.echoInput(raw);
       shellApi.shell.session.history.push(raw);
@@ -189,7 +214,7 @@ export default function App() {
       <Flex as="main" flex="1 1 auto" minH={0} direction={{ base: "column", md: "row" }}>
         <ManualPanel
           lab={lab}
-          taskDone={taskDone}
+          taskDone={displayTaskDone}
           isLastLab={currentLabIndex >= LABS.length - 1}
           onRunCommand={handleRunCommand}
           onCheck={() => {

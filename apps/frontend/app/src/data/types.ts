@@ -27,6 +27,8 @@ export interface LabBodySection {
 
 export interface LabTask {
   text: string;
+  /** Explanation shown for this task only: what each part means, what success looks like, common mistake. */
+  hint: string;
   check: (ctx: LabCheckCtx) => boolean;
 }
 
@@ -37,7 +39,6 @@ export interface Lab {
   intro: string;
   body: LabBodySection[];
   tasks: LabTask[];
-  hints: string[];
   solution: string[];
   tree?: string;
   brief?: string;

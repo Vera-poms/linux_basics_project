@@ -1,5 +1,6 @@
 import { Box, Heading, Link, Table, Tbody, Td, Text, Th, Thead, Tr, Wrap, WrapItem } from "@chakra-ui/react";
 import type { Lab } from "../../data/types";
+import { LABS } from "../../data/labs";
 import CommandChip from "./CommandChip";
 
 interface LessonBodyProps {
@@ -39,7 +40,7 @@ export default function LessonBody({ lab, onRunCommand }: LessonBodyProps) {
         {lab.title}
       </Heading>
       <Text fontFamily="mono" fontSize="0.72rem" color="lb.teal" mb="1.1rem">
-        lab {String(lab.id).padStart(2, "0")} of 10 &nbsp;·&nbsp; {lab.sub}
+        lab {String(lab.id).padStart(2, "0")} of {LABS.length} &nbsp;·&nbsp; {lab.sub}
       </Text>
       <Html html={lab.intro} fontSize="0.95rem" lineHeight="1.62" my="0.6rem" maxW="62ch" color="#232a32" />
 
