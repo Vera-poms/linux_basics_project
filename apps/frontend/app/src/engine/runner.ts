@@ -3,6 +3,7 @@ import { FileSystem, HOME } from "./filesystem";
 import { tokenize, expandBraces, globMatch, splitChains, splitPipes, type Token } from "./shell";
 import { createCommands, type CommandFn, type ShellSession } from "./commands";
 import { UserDB } from "./users";
+import { allowed } from "./perms";
 
 interface Redirs {
   out: string | null;
@@ -178,6 +179,13 @@ export class Shell {
     return { out, err, code: 0 };
   }
 
+  private canWrite(abs: string): boolean {
+    const n = this.fs.getNode(abs);
+    if (!n) return true;
+    const root = this.session.currentUser === "root" || this.session.sudoActive;
+    return allowed(n, this.session.currentUser, this.users, "w", root);
+  }
+
   private runSimple(segment: string, stdin?: string): CmdResult {
     const toks = tokenize(this.substitute(segment));
     if (!toks.length) return { out: "", err: "", code: 0 };
@@ -227,6 +235,7 @@ export class Shell {
         payload = res.out + res.err;
         res = { ...res, err: "" };
       }
+      if (!this.canWrite(abs)) return { out: "", err: "bash: " + r.out + ": Permission denied\n", code: 1 };
       const prev = r.outApp ? this.fs.readFile(abs) || "" : "";
       if (!this.fs.writeFile(abs, prev + payload))
         return { out: "", err: "bash: " + r.out + ": No such file or directory\n", code: 1 };
@@ -234,6 +243,7 @@ export class Shell {
     }
     if (r.err !== null) {
       const abs = this.fs.resolve(r.err);
+      if (!this.canWrite(abs)) return { out: res.out, err: "bash: " + r.err + ": Permission denied\n", code: 1 };
       const prev = r.errApp ? this.fs.readFile(abs) || "" : "";
       this.fs.writeFile(abs, prev + res.err);
       res = { out: res.out, err: "", code: res.code };
