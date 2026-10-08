@@ -195,6 +195,12 @@ export class Shell {
     const name = argv[0];
     const rest = argv.slice(1);
 
+    // Like bash, `>` empties the target before the command starts, so `sort f > f` reads an empty file.
+    if (r.out !== null && !r.outApp) {
+      const target = this.fs.resolve(r.out);
+      if (this.fs.isFile(target) && this.canWrite(target)) this.fs.writeFile(target, "");
+    }
+
     if (r.in !== null) {
       const c = this.fs.readFile(this.fs.resolve(r.in));
       if (c === null) return { out: "", err: "bash: " + r.in + ": No such file or directory\n", code: 1 };

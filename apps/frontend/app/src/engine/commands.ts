@@ -91,15 +91,59 @@ export function createCommands(fs: FileSystem, session: ShellSession, users: Use
     if (!allowed(n, session.currentUser, users, "x", isRoot())) return ERR("bash: cd: " + a[0] + ": Permission denied");
     fs.prevCwd = fs.cwd;
     fs.cwd = target;
-    return OK();
+    return OK(a[0] === "-" ? target + "\n" : ""); // `cd -` prints where it took you, like bash
   };
 
   CMDS.ls = (a) => {
     const { f, rest } = flags(a);
     const paths = rest.length ? rest : ["."];
-    const chunks: string[] = [];
+    const recursive = f.has("R") && !f.has("d");
+    const showHidden = f.has("a") || f.has("A");
+    const header = paths.length > 1 || recursive;
+    type Entry = { name: string; node: FSNode };
+    const bytesOf = (n: FSNode) => (n.t === "d" ? 4096 : sizeOf(n));
+    const mark = (name: string, n: FSNode) => {
+      if (!f.has("F")) return name;
+      if (n.t === "d") return name + "/";
+      if (n.t === "l") return name + "@";
+      return n.mode.split("").some((d) => (Number(d) & 1) === 1) ? name + "*" : name;
+    };
+    const order = (es: Entry[]) => {
+      const out = es.slice();
+      if (f.has("S")) out.sort((x, y) => bytesOf(y.node) - bytesOf(x.node));
+      return f.has("r") ? out.reverse() : out;
+    };
+    const render = (entries: Entry[], withTotal: boolean): string => {
+      if (!f.has("l")) return entries.map((e) => mark(e.name, e.node)).join("\n") + (entries.length ? "\n" : "");
+      const rows = entries.map((e) => {
+        const bytes = bytesOf(e.node);
+        const sz = f.has("h") ? human(bytes) : String(bytes);
+        return [
+          modeStr(e.node),
+          e.node.t === "d" ? "2" : "1",
+          e.node.owner,
+          e.node.group,
+          sz,
+          "Sep 14 09:2" + (e.name.length % 9),
+          mark(e.name, e.node) + (e.node.t === "l" ? " -> " + e.node.target : ""),
+        ];
+      });
+      const w = [0, 0, 0, 0, 0].map((_, i) => Math.max(0, ...rows.map((r) => r[i].length)));
+      return (
+        (withTotal ? "total " + entries.length * 4 + "\n" : "") +
+        rows
+          .map(
+            (r) =>
+              r[0].padEnd(w[0]) + " " + r[1].padStart(w[1]) + " " + r[2].padEnd(w[2]) + " " +
+              r[3].padEnd(w[3]) + " " + r[4].padStart(w[4]) + " " + r[5] + " " + r[6]
+          )
+          .join("\n") + (rows.length ? "\n" : "")
+      );
+    };
+
     let err = "";
-    const many = paths.length > 1;
+    const fileEntries: Entry[] = [];
+    const dirArgs: { label: string; abs: string; node: FSNode }[] = [];
     for (const p of paths) {
       const abs = fs.resolve(p);
       const node = fs.getNode(abs);
@@ -107,84 +151,89 @@ export function createCommands(fs: FileSystem, session: ShellSession, users: Use
         err += "ls: cannot access '" + p + "': No such file or directory\n";
         continue;
       }
-      let entries: { name: string; node: FSNode }[];
-      if (node.t === "d" && !f.has("d")) {
-        let names = Object.keys(node.children).sort().filter((n) => f.has("a") || n[0] !== ".");
-        if (f.has("a")) names = [".", ".."].concat(names);
-        entries = names.map((n) => ({
-          name: n,
-          node: n === "." ? node : n === ".." ? fs.getNode(dirname(abs)) || node : node.children[n],
-        }));
-      } else {
-        entries = [{ name: p, node }];
-      }
-      let body: string;
-      if (f.has("l")) {
-        const rows = entries.map((e) => {
-          const bytes = e.node.t === "d" ? 4096 : sizeOf(e.node);
-          const sz = f.has("h") ? human(bytes) : String(bytes);
-          return [
-            modeStr(e.node),
-            e.node.t === "d" ? "2" : "1",
-            e.node.owner,
-            e.node.group,
-            sz,
-            "Sep 14 09:2" + (e.name.length % 9),
-            e.name + (e.node.t === "l" ? " -> " + e.node.target : ""),
-          ];
-        });
-        const w = [0, 0, 0, 0, 0].map((_, i) => Math.max(0, ...rows.map((r) => r[i].length)));
-        body =
-          (node.t === "d" && !f.has("d") ? "total " + entries.length * 4 + "\n" : "") +
-          rows
-            .map(
-              (r) =>
-                r[0].padEnd(w[0]) + " " + r[1].padStart(w[1]) + " " + r[2].padEnd(w[2]) + " " +
-                r[3].padEnd(w[3]) + " " + r[4].padStart(w[4]) + " " + r[5] + " " + r[6]
-            )
-            .join("\n") + (rows.length ? "\n" : "");
-      } else {
-        body = entries.map((e) => e.name).join("\n") + (entries.length ? "\n" : "");
-      }
-      chunks.push((many ? p + ":\n" : "") + body);
+      if (node.t === "d" && !f.has("d")) dirArgs.push({ label: p, abs, node });
+      else fileEntries.push({ name: p, node });
     }
-    const res = OK(chunks.join(many ? "\n" : ""));
+
+    // ls sorts the names it was given, not just the contents of a folder.
+    fileEntries.sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0));
+    dirArgs.sort((x, y) => (x.label < y.label ? -1 : x.label > y.label ? 1 : 0));
+    const sections: string[] = [];
+    if (fileEntries.length) sections.push(render(order(fileEntries), false));
+    const listDir = (label: string, abs: string, node: FSNode) => {
+      if (node.t !== "d") return;
+      let names = Object.keys(node.children).sort().filter((n) => showHidden || n[0] !== ".");
+      if (f.has("a")) names = [".", ".."].concat(names);
+      const entries: Entry[] = names.map((n) => ({
+        name: n,
+        node: n === "." ? node : n === ".." ? fs.getNode(dirname(abs)) || node : node.children[n],
+      }));
+      sections.push((header ? label + ":\n" : "") + render(order(entries), true));
+      if (recursive)
+        for (const n of names)
+          if (n !== "." && n !== ".." && node.children[n].t === "d")
+            listDir(label.replace(/\/$/, "") + "/" + n, abs === "/" ? "/" + n : abs + "/" + n, node.children[n]);
+    };
+    for (const d of dirArgs) listDir(d.label, d.abs, d.node);
+
+    const res = OK(sections.join("\n"));
     res.err = err;
     if (err) res.code = 1;
     return res;
   };
 
   CMDS.tree = (a) => {
-    const { f, rest } = flags(a);
+    const { f, rest, opts } = flags(a, "L");
     const root = fs.resolve(rest[0] || ".");
     const node = fs.getNode(root);
     if (!node) return ERR("tree: " + (rest[0] || ".") + ": No such file or directory");
+    const maxLevel = opts.L !== undefined ? parseInt(opts.L, 10) : Infinity;
+    if (!(maxLevel >= 1)) return ERR("tree: Invalid level, must be greater than 0.");
     let dirs = 0;
     let files = 0;
     let out = (rest[0] || ".") + "\n";
-    (function walk(n: FSNode, prefix: string) {
-      if (n.t !== "d") return;
-      const keys = Object.keys(n.children).sort().filter((k) => f.has("a") || k[0] !== ".");
+    (function walk(n: FSNode, prefix: string, level: number) {
+      if (n.t !== "d" || level > maxLevel) return;
+      const keys = Object.keys(n.children)
+        .sort()
+        .filter((k) => (f.has("a") || k[0] !== ".") && (!f.has("d") || n.children[k].t === "d"));
       keys.forEach((k, i) => {
         const last = i === keys.length - 1;
         const child = n.children[k];
         out += prefix + (last ? "└── " : "├── ") + k + (child.t === "l" ? " -> " + child.target : "") + "\n";
         if (child.t === "d") {
           dirs++;
-          walk(child, prefix + (last ? "    " : "│   "));
+          walk(child, prefix + (last ? "    " : "│   "), level + 1);
         } else files++;
       });
-    })(node, "");
-    return OK(out + "\n" + dirs + " directories, " + files + " files\n");
+    })(node, "", 1);
+    const dWord = dirs + (dirs === 1 ? " directory" : " directories");
+    const fWord = files + (files === 1 ? " file" : " files");
+    return OK(out + "\n" + dWord + (f.has("d") ? "" : ", " + fWord) + "\n");
   };
 
   CMDS.mkdir = (a) => {
-    const { f, rest } = flags(a);
+    const { f, rest, opts } = flags(a, "m");
+    const mode = opts.m !== undefined && /^[0-7]{3,4}$/.test(opts.m) ? opts.m.slice(-3) : null;
+    if (opts.m !== undefined && mode === null) return ERR("mkdir: invalid mode '" + opts.m + "'");
+    let out = "";
     let err = "";
+    const made = (disp: string, abs: string, isLast: boolean) => {
+      const n = fs.getNode(abs);
+      if (n && mode && isLast) n.mode = mode;
+      if (f.has("v")) out += "mkdir: created directory '" + disp + "'\n";
+    };
     for (const p of rest) {
       const abs = fs.resolve(p);
       if (f.has("p")) {
-        fs.mkdirp(abs);
+        const segs = p.split("/").filter(Boolean);
+        segs.forEach((_, i) => {
+          const disp = (p.startsWith("/") ? "/" : "") + segs.slice(0, i + 1).join("/");
+          const cur = fs.resolve(disp);
+          if (fs.exists(cur)) return;
+          fs.mkdirp(cur);
+          made(disp, cur, i === segs.length - 1);
+        });
         continue;
       }
       if (fs.exists(abs)) {
@@ -196,14 +245,17 @@ export function createCommands(fs: FileSystem, session: ShellSession, users: Use
         err += "mkdir: cannot create directory '" + p + "': No such file or directory\n";
         continue;
       }
-      par.children[basename(abs)] = { t: "d", mode: "755", owner: session.currentUser, group: session.currentUser, children: {} };
+      par.children[basename(abs)] = { t: "d", mode: mode || "755", owner: session.currentUser, group: session.currentUser, children: {} };
+      made(p, abs, true);
     }
-    return err ? { out: "", err, code: 1 } : OK();
+    return { out, err, code: err ? 1 : 0 };
   };
 
   CMDS.rmdir = (a) => {
+    const { f, rest } = flags(a);
+    let out = "";
     let err = "";
-    for (const p of a) {
+    for (const p of rest) {
       const abs = fs.resolve(p);
       const n = fs.getNode(abs, false);
       if (!n) {
@@ -218,14 +270,23 @@ export function createCommands(fs: FileSystem, session: ShellSession, users: Use
         err += "rmdir: failed to remove '" + p + "': Directory not empty\n";
         continue;
       }
+      if (f.has("v")) out += "rmdir: removing directory, '" + p + "'\n";
       fs.unlink(abs);
     }
-    return err ? { out: "", err, code: 1 } : OK();
+    return { out, err, code: err ? 1 : 0 };
   };
 
   CMDS.rm = (a) => {
     const { f, rest } = flags(a);
+    const recursive = f.has("r") || f.has("R");
+    let out = "";
     let err = "";
+    const removeVerbose = (n: FSNode, disp: string) => {
+      if (n.t === "d") {
+        for (const k of Object.keys(n.children).sort()) removeVerbose(n.children[k], disp + "/" + k);
+        out += "removed directory '" + disp + "'\n";
+      } else out += "removed '" + disp + "'\n";
+    };
     for (const p of rest) {
       const abs = fs.resolve(p);
       const n = fs.getNode(abs, false);
@@ -233,17 +294,30 @@ export function createCommands(fs: FileSystem, session: ShellSession, users: Use
         if (!f.has("f")) err += "rm: cannot remove '" + p + "': No such file or directory\n";
         continue;
       }
-      if (n.t === "d" && !(f.has("r") || f.has("R"))) {
-        err += "rm: cannot remove '" + p + "': Is a directory\n";
-        continue;
+      if (n.t === "d" && !recursive) {
+        if (!f.has("d")) {
+          err += "rm: cannot remove '" + p + "': Is a directory\n";
+          continue;
+        }
+        if (Object.keys(n.children).length) {
+          err += "rm: cannot remove '" + p + "': Directory not empty\n";
+          continue;
+        }
       }
       if (abs === "/" || abs === HOME) {
         err += "rm: refusing to remove '" + p + "'\n";
         continue;
       }
+      if (f.has("i") && !f.has("f")) {
+        // The sandbox cannot read a reply, so (like a closed stdin) it answers "no".
+        const what = n.t === "d" ? "descend into directory" : n.t === "l" ? "remove symbolic link" : n.content === "" ? "remove regular empty file" : "remove regular file";
+        err += "rm: " + what + " '" + p + "'? (answered no: the sandbox cannot read a reply)\n";
+        continue;
+      }
+      if (f.has("v")) removeVerbose(n, p.replace(/\/$/, ""));
       fs.unlink(abs);
     }
-    return err ? { out: "", err, code: 1 } : OK();
+    return { out, err, code: err ? 1 : 0 };
   };
 
   CMDS.touch = (a) => {
@@ -320,61 +394,100 @@ export function createCommands(fs: FileSystem, session: ShellSession, users: Use
     return { content: n.content };
   };
 
-  CMDS.head = (a, stdin) => {
-    const { rest, opts } = flags(a, "n");
-    const n = parseInt(opts.n !== undefined ? opts.n : "10", 10) || 10;
-    if (!rest.length) {
-      const L2 = lines(stdin ?? "").slice(0, n);
-      return OK(L2.length ? L2.join("\n") + "\n" : "");
-    }
-    const r = readable("head", rest[0]);
-    if (r.err) return ERR(r.err);
-    const L2 = lines(r.content!).slice(0, n);
-    return OK(L2.length ? L2.join("\n") + "\n" : "");
+  const headTail = (kind: "head" | "tail"): CommandFn => (a, stdin) => {
+    // `head -3` is shorthand for `head -n 3`.
+    const norm: string[] = [];
+    for (const x of a) norm.push(...(/^-\d+$/.test(x) ? ["-n", x.slice(1)] : [x]));
+    const { rest, opts } = flags(norm, "nc");
+    const byBytes = opts.c !== undefined;
+    const spec = byBytes ? opts.c : opts.n !== undefined ? opts.n : "10";
+    const fromStart = kind === "tail" && spec.startsWith("+");
+    const dropLast = kind === "head" && spec.startsWith("-");
+    const count = parseInt(spec.replace(/^[+-]/, ""), 10);
+    if (Number.isNaN(count)) return ERR(kind + ": invalid number of " + (byBytes ? "bytes" : "lines") + ": '" + spec + "'");
+    const pick = <T,>(all: T[]): T[] =>
+      kind === "head"
+        ? dropLast ? all.slice(0, Math.max(0, all.length - count)) : all.slice(0, count)
+        : fromStart ? all.slice(Math.max(0, count - 1)) : count === 0 ? [] : all.slice(-count);
+    const apply = (s: string): string => {
+      if (byBytes) return pick(s.split("")).join("");
+      const sel = pick(lines(s));
+      return sel.length ? sel.join("\n") + "\n" : "";
+    };
+    if (!rest.length) return OK(apply(stdin ?? ""));
+    let out = "";
+    let err = "";
+    rest.forEach((p) => {
+      const r = readable(kind, p);
+      if (r.err) {
+        err += r.err + "\n";
+        return;
+      }
+      if (rest.length > 1) out += (out ? "\n" : "") + "==> " + p + " <==\n";
+      out += apply(r.content!);
+    });
+    return { out, err, code: err ? 1 : 0 };
   };
-  CMDS.tail = (a, stdin) => {
-    const { rest, opts } = flags(a, "n");
-    const n = parseInt(opts.n !== undefined ? opts.n : "10", 10) || 10;
-    if (!rest.length) {
-      const L2 = lines(stdin ?? "").slice(-n);
-      return OK(L2.length ? L2.join("\n") + "\n" : "");
-    }
-    const r = readable("tail", rest[0]);
-    if (r.err) return ERR(r.err);
-    const L2 = lines(r.content!).slice(-n);
-    return OK(L2.length ? L2.join("\n") + "\n" : "");
-  };
+  CMDS.head = headTail("head");
+  CMDS.tail = headTail("tail");
 
   CMDS.wc = (a, stdin) => {
     const { f, rest } = flags(a);
     const only = f.has("l") || f.has("w") || f.has("c");
-    const fmt = (s: string, name: string) => {
-      const l = s === "" ? 0 : s.split("\n").length - (s.endsWith("\n") ? 1 : 0);
-      const w = s.split(/\s+/).filter(Boolean).length;
+    const count = (s: string) => ({
+      l: (s.match(/\n/g) || []).length, // wc counts newline characters, so an unterminated last line is not counted
+      w: s.split(/\s+/).filter(Boolean).length,
+      c: s.length,
+    });
+    const fmt = (n: { l: number; w: number; c: number }, name: string) => {
       const parts: number[] = [];
-      if (f.has("l") || !only) parts.push(l);
-      if (f.has("w") || !only) parts.push(w);
-      if (f.has("c") || !only) parts.push(s.length);
+      if (f.has("l") || !only) parts.push(n.l);
+      if (f.has("w") || !only) parts.push(n.w);
+      if (f.has("c") || !only) parts.push(n.c);
       return parts.map((p) => String(p).padStart(only && parts.length === 1 ? 0 : 7)).join(" ") + (name ? " " + name : "");
     };
-    if (!rest.length) return OK(fmt(stdin ?? "", "") + "\n");
+    if (!rest.length) return OK(fmt(count(stdin ?? ""), "") + "\n");
     let out = "";
     let err = "";
+    const total = { l: 0, w: 0, c: 0 };
+    let ok = 0;
     for (const p of rest) {
       const c = fs.readFile(fs.resolve(p));
       if (c === null) {
         err += "wc: " + p + ": No such file or directory\n";
         continue;
       }
-      out += fmt(c, p) + "\n";
+      const n = count(c);
+      total.l += n.l;
+      total.w += n.w;
+      total.c += n.c;
+      ok++;
+      out += fmt(n, p) + "\n";
     }
+    if (rest.length > 1 && ok > 0) out += fmt(total, "total") + "\n";
     return { out, err, code: err ? 1 : 0 };
+  };
+
+  /** A copy belongs to whoever made it (like real cp) unless -p asks to keep the original owner. */
+  const reown = (n: FSNode): FSNode => {
+    n.owner = session.currentUser;
+    n.group = session.currentUser;
+    if (n.t === "d") for (const k in n.children) reown(n.children[k]);
+    return n;
+  };
+  /** One line per file the way `-v` prints a recursive copy. */
+  const walkNames = (n: FSNode, sDisp: string, dDisp: string, emit: (s: string, d: string) => void) => {
+    emit(sDisp, dDisp);
+    if (n.t === "d") for (const k of Object.keys(n.children).sort()) walkNames(n.children[k], sDisp + "/" + k, dDisp + "/" + k, emit);
   };
 
   CMDS.cp = (a) => {
     const { f, rest } = flags(a);
     if (rest.length < 2) return ERR("cp: missing destination file operand");
     const dst = rest.pop()!;
+    const recursive = f.has("r") || f.has("R") || f.has("a");
+    const preserve = f.has("p") || f.has("a");
+    let out = "";
     let err = "";
     for (const src of rest) {
       const sAbs = fs.resolve(src);
@@ -383,26 +496,56 @@ export function createCommands(fs: FileSystem, session: ShellSession, users: Use
         err += "cp: cannot stat '" + src + "': No such file or directory\n";
         continue;
       }
-      if (sNode.t === "d" && !(f.has("r") || f.has("R") || f.has("a"))) {
+      if (sNode.t === "d" && !recursive) {
         err += "cp: -r not specified; omitting directory '" + src + "'\n";
         continue;
       }
+      // `cp -r dir/. dest` copies what is inside dir, not dir itself.
+      const contentsOnly = sNode.t === "d" && /(^|\/)\.$/.test(src);
       let dAbs = fs.resolve(dst);
-      if (fs.isDir(dAbs)) dAbs = dAbs + "/" + basename(sAbs);
-      const par = fs.parentOf(dAbs);
-      if (!par || par.t !== "d") {
-        err += "cp: cannot create '" + dst + "': No such file or directory\n";
-        continue;
+      let dDisp = dst;
+      if (!contentsOnly && fs.isDir(dAbs)) {
+        dAbs = dAbs + "/" + basename(sAbs);
+        dDisp = dst.replace(/\/$/, "") + "/" + basename(sAbs);
       }
-      par.children[basename(dAbs)] = deepCopy(sNode);
+      const place = (node: FSNode, abs: string, sDisp: string, disp: string) => {
+        const par = fs.parentOf(abs);
+        if (!par || par.t !== "d") {
+          err += "cp: cannot create '" + disp + "': No such file or directory\n";
+          return;
+        }
+        const existing = par.children[basename(abs)];
+        if (existing && node.t === "d" && existing.t === "d") {
+          // Copying a folder onto a folder of the same name merges into it.
+          for (const k of Object.keys(node.children).sort()) place(node.children[k], abs + "/" + k, sDisp + "/" + k, disp + "/" + k);
+          return;
+        }
+        if (existing) {
+          if (f.has("n")) return;
+          if (f.has("i")) {
+            // The sandbox cannot read a reply, so (like a closed stdin) it answers "no".
+            err += "cp: overwrite '" + disp + "'? (answered no: the sandbox cannot read a reply)\n";
+            return;
+          }
+        }
+        const copy = deepCopy(node);
+        par.children[basename(abs)] = preserve ? copy : reown(copy);
+        if (f.has("v")) walkNames(node, sDisp, disp, (s, d) => (out += "'" + s + "' -> '" + d + "'\n"));
+      };
+      if (contentsOnly) {
+        if (!fs.exists(dAbs)) fs.mkdirp(dAbs);
+        for (const k of Object.keys((sNode as { children: Record<string, FSNode> }).children).sort())
+          place((sNode as { children: Record<string, FSNode> }).children[k], dAbs + "/" + k, src.replace(/\/?\.$/, "") + "/" + k, dDisp.replace(/\/$/, "") + "/" + k);
+      } else place(sNode, dAbs, src, dDisp);
     }
-    return err ? { out: "", err, code: 1 } : OK();
+    return { out, err, code: err ? 1 : 0 };
   };
 
   CMDS.mv = (a) => {
-    const { rest } = flags(a);
+    const { f, rest } = flags(a);
     if (rest.length < 2) return ERR("mv: missing destination file operand");
     const dst = rest.pop()!;
+    let out = "";
     let err = "";
     for (const src of rest) {
       const sAbs = fs.resolve(src);
@@ -412,16 +555,33 @@ export function createCommands(fs: FileSystem, session: ShellSession, users: Use
         continue;
       }
       let dAbs = fs.resolve(dst);
-      if (fs.isDir(dAbs)) dAbs = dAbs + "/" + basename(sAbs);
+      let dDisp = dst;
+      if (fs.isDir(dAbs)) {
+        dAbs = dAbs + "/" + basename(sAbs);
+        dDisp = dst.replace(/\/$/, "") + "/" + basename(sAbs);
+      }
       const par = fs.parentOf(dAbs);
       if (!par || par.t !== "d") {
-        err += "mv: cannot move '" + src + "': No such file or directory\n";
+        err += "mv: cannot move '" + src + "' to '" + dst + "': No such file or directory\n";
         continue;
+      }
+      if (dAbs === sAbs) {
+        err += "mv: '" + src + "' and '" + dDisp + "' are the same file\n";
+        continue;
+      }
+      if (par.children[basename(dAbs)]) {
+        if (f.has("n")) continue;
+        if (f.has("i") && !f.has("f")) {
+          // The sandbox cannot read a reply, so (like a closed stdin) it answers "no".
+          err += "mv: overwrite '" + dDisp + "'? (answered no: the sandbox cannot read a reply)\n";
+          continue;
+        }
       }
       par.children[basename(dAbs)] = sNode;
       fs.unlink(sAbs);
+      if (f.has("v")) out += "renamed '" + src + "' -> '" + dDisp + "'\n";
     }
-    return err ? { out: "", err, code: 1 } : OK();
+    return { out, err, code: err ? 1 : 0 };
   };
 
   CMDS.find = (a) => {

@@ -23,6 +23,7 @@ export function tokenize(line: string): Token[] {
       has = true;
       continue;
     }
+    if (ch === "#" && !has) break; // an unquoted # at the start of a word begins a comment
     if (ch === "\\" && i + 1 < line.length) {
       cur += line[++i];
       has = true;
@@ -45,10 +46,21 @@ export function tokenize(line: string): Token[] {
 }
 
 export function expandBraces(s: string): string[] {
-  const m = s.match(/^(.*?)\{([^{}]*,[^{}]*)\}(.*)$/);
+  const m = s.match(/^(.*?)\{([^{}]*,[^{}]*|-?\d+\.\.-?\d+|[a-zA-Z]\.\.[a-zA-Z])\}(.*)$/);
   if (!m) return [s];
   const out: string[] = [];
-  for (const opt of m[2].split(","))
+  let items: string[];
+  if (!m[2].includes(",")) {
+    // A range such as {1..3} or {a..e}, counting down when the start is larger.
+    const [from, to] = m[2].split("..");
+    const numeric = /^-?\d+$/.test(from);
+    const a = numeric ? parseInt(from, 10) : from.charCodeAt(0);
+    const b = numeric ? parseInt(to, 10) : to.charCodeAt(0);
+    const step = a <= b ? 1 : -1;
+    items = [];
+    for (let k = a; step > 0 ? k <= b : k >= b; k += step) items.push(numeric ? String(k) : String.fromCharCode(k));
+  } else items = m[2].split(",");
+  for (const opt of items)
     for (const tail of expandBraces(m[1] + opt + m[3])) out.push(tail);
   return out;
 }

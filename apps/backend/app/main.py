@@ -30,6 +30,12 @@ LAB_TITLES = {
     8: "Links, sizes, archives",
     9: "Pipes and redirection",
     10: "Final challenge",
+    11: "The Manuscript Mystery",
+    12: "Display user and group information",
+    13: "Compare file contents",
+    14: "Change file ownership",
+    15: "User account management",
+    16: "The Joker's Trick",
 }
 
 
