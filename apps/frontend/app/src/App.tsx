@@ -1,5 +1,5 @@
 import { Flex, Text } from "@chakra-ui/react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LABS } from "./data/labs";
 import { taskState } from "./data/labHelpers";
 import type { LabCheckCtx } from "./data/types";
@@ -7,6 +7,9 @@ import { useProgress } from "./state/ProgressContext";
 import { useAuth } from "./state/AuthContext";
 import { useShell } from "./state/useShell";
 import StepNav from "./components/Header/StepNav";
+import BookmarksMenu from "./components/Header/BookmarksMenu";
+import { OPEN_TOPIC_EVENT } from "./components/Manual/LessonBody";
+import { topicDomId, type Bookmark } from "./state/BookmarksContext";
 import ManualPanel from "./components/Manual/ManualPanel";
 import ConsolePanel from "./components/Console/ConsolePanel";
 import type { InputLineHandle } from "./components/Console/InputLine";
@@ -32,6 +35,7 @@ export default function App() {
   const shellApi = useShell();
   const consoleRef = useRef<InputLineHandle>(null);
   const bootedRef = useRef(false);
+  const [pendingJump, setPendingJump] = useState<Bookmark | null>(null);
 
   const lab = LABS[currentLabIndex];
 
@@ -84,6 +88,25 @@ export default function App() {
     shellApi.runSetup(target.setup);
     shellApi.pushLine(`── lab ${target.id}: ${target.title} ──`, "sys");
     consoleRef.current?.focus();
+  }
+
+  // Scroll to a bookmarked topic once its lab is on screen (after a lab switch the new body renders first).
+  useEffect(() => {
+    if (!pendingJump || LABS[currentLabIndex].id !== pendingJump.lab) return;
+    const { lab, key } = pendingJump;
+    // Topics inside collapsed accordion items: open the item first, then scroll once it has rendered.
+    window.dispatchEvent(new CustomEvent(OPEN_TOPIC_EVENT, { detail: key }));
+    window.setTimeout(() => {
+      document.getElementById(topicDomId(lab, key))?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+    setPendingJump(null);
+  }, [pendingJump, currentLabIndex]);
+
+  function handleBookmarkSelect(b: Bookmark) {
+    const index = LABS.findIndex((l) => l.id === b.lab);
+    if (index < 0) return;
+    if (index !== currentLabIndex) handleGotoLab(index);
+    setPendingJump(b);
   }
 
   function runCheck() {
@@ -194,6 +217,7 @@ export default function App() {
           hands-on terminal
         </Text>
         <StepNav labs={LABS} currentIndex={currentLabIndex} doneIds={progress.done} onSelect={handleGotoLab} />
+        <BookmarksMenu labs={LABS} onSelect={handleBookmarkSelect} />
         <Text fontFamily="mono" fontSize="0.72rem" color="#7e909d">
           {user?.email}
         </Text>

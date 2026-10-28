@@ -46,3 +46,17 @@ class LabProgress(Base):
 
     user: Mapped["User"] = relationship(back_populates="lab_progress")
     lab: Mapped["Lab"] = relationship(back_populates="progress_rows")
+
+
+class Bookmark(Base):
+    """A reading-section topic (a subtopic heading or one of its examples) a user saved for later."""
+
+    __tablename__ = "bookmarks"
+    __table_args__ = (UniqueConstraint("user_id", "lab_id", "topic_key", name="uq_bookmark_user_lab_topic"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    lab_id: Mapped[int] = mapped_column(ForeignKey("labs.id"), nullable=False)
+    topic_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

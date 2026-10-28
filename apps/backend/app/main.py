@@ -5,9 +5,9 @@ from sqlalchemy.orm import Session
 from core.config import CORS_ORIGINS
 from db.connection import engine, SessionLocal
 from db.models import Base, Lab
-from routers import auth, progress
+from routers import auth, bookmarks, progress
 
-app = FastAPI(title="Linux Basics API", tags=["Home"])
+app = FastAPI(title="Linux Basics API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,6 +56,7 @@ seed_labs()
 
 app.include_router(auth.router)
 app.include_router(progress.router)
+app.include_router(bookmarks.router)
 
 
 @app.get("/")

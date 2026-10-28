@@ -2,6 +2,7 @@ import { Box, Spinner, Text, VStack } from "@chakra-ui/react";
 import { useMemo } from "react";
 import { AuthProvider, useAuth } from "./state/AuthContext";
 import { ProgressProvider } from "./state/ProgressContext";
+import { BookmarksProvider } from "./state/BookmarksContext";
 import { apiProgressStore } from "./state/progressStore";
 import AuthScreen from "./components/Auth/AuthScreen";
 import App from "./App";
@@ -28,7 +29,9 @@ function Gate() {
 
   return (
     <ProgressProvider store={store} key={user.id}>
-      <App />
+      <BookmarksProvider>
+        <App />
+      </BookmarksProvider>
     </ProgressProvider>
   );
 }

@@ -30,3 +30,13 @@ class ProgressPayload(BaseModel):
     lab: int = 0
     done: dict[str, bool] = Field(default_factory=dict)
     hintIdx: dict[str, int] = Field(default_factory=dict)
+
+
+class BookmarkIn(BaseModel):
+    lab: int
+    key: str = Field(min_length=1, max_length=32)
+    title: str = Field(min_length=1, max_length=255)
+
+
+class BookmarkOut(BookmarkIn):
+    pass
