@@ -1,6 +1,6 @@
 import {
   Accordion, AccordionButton, AccordionIcon, AccordionItem, AccordionPanel,
-  Box, Button, Flex, Heading, IconButton, Link, ListItem, SimpleGrid, Table, Tbody, Td, Text, Th, Thead, Tr, UnorderedList, Wrap, WrapItem,
+  Box, Button, Code, Flex, Heading, IconButton, Link, ListItem, SimpleGrid, Table, Tbody, Td, Text, Th, Thead, Tr, UnorderedList, Wrap, WrapItem,
 } from "@chakra-ui/react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { Lab } from "../../data/types";
@@ -229,7 +229,7 @@ export default function LessonBody({ lab, onRunCommand }: LessonBodyProps) {
               {sec.whenToUse && sec.whenToUse.length > 0 && (
                 <Box>
                   <Text fontSize="0.82rem" fontWeight={600} color="lb.teal" mb="0.3rem">
-                    Use it when
+                    Use {sec.subject ? <Code>{sec.subject}</Code> : "it"} when
                   </Text>
                   <UnorderedList fontSize="0.9rem" lineHeight="1.5" spacing="0.25rem" ml="1rem">
                     {sec.whenToUse.map((t, ti) => (
@@ -241,7 +241,7 @@ export default function LessonBody({ lab, onRunCommand }: LessonBodyProps) {
               {sec.whenNotToUse && sec.whenNotToUse.length > 0 && (
                 <Box>
                   <Text fontSize="0.82rem" fontWeight={600} color="lb.warn" mb="0.3rem">
-                    Avoid it when
+                    Avoid {sec.subject ? <Code>{sec.subject}</Code> : "it"} when
                   </Text>
                   <UnorderedList fontSize="0.9rem" lineHeight="1.5" spacing="0.25rem" ml="1rem">
                     {sec.whenNotToUse.map((t, ti) => (

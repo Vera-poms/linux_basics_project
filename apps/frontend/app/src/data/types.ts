@@ -54,6 +54,8 @@ export interface LabBodySection {
   /** Rows of [flag, meaning]. */
   options?: string[][];
   examples?: LabExample[];
+  /** Command or topic named in the "Use … when" / "Avoid … when" headings. */
+  subject?: string;
   whenToUse?: string[];
   whenNotToUse?: string[];
   /** Consequences callout, distinct from `aside`. */
