@@ -8,7 +8,7 @@ interface BookmarksMenuProps {
 }
 
 export default function BookmarksMenu({ labs, onSelect }: BookmarksMenuProps) {
-  const { bookmarks } = useBookmarks();
+  const { bookmarks, toggle } = useBookmarks();
   const labIndex = new Map(labs.map((l, i) => [l.id, i]));
   const sorted = [...bookmarks].sort((a, b) => (labIndex.get(a.lab) ?? 0) - (labIndex.get(b.lab) ?? 0));
 
@@ -20,11 +20,15 @@ export default function BookmarksMenu({ labs, onSelect }: BookmarksMenuProps) {
       <MenuList maxH="60vh" overflowY="auto" fontSize="0.85rem" zIndex={20}>
         {sorted.length === 0 && (
           <Text px="0.9rem" py="0.4rem" color="gray.500" maxW="22rem">
-            Nothing saved yet. Use the bookmark icon next to any topic or example in the manual.
+            Nothing saved yet. Use the bookmark icon next to any topic or example in the manual. One bookmark is kept at a time, and it is cleared once you open it.
           </Text>
         )}
         {sorted.map((b) => (
-          <MenuItem key={`${b.lab}:${b.key}`} onClick={() => onSelect(b)}>
+          <MenuItem key={`${b.lab}:${b.key}`} onClick={() => {
+              // Visiting a bookmark uses it up, freeing the slot for a new one.
+              toggle(b.lab, b.key, b.title);
+              onSelect(b);
+            }}>
             <Text as="span" fontFamily="mono" fontSize="0.72rem" color="lb.teal" mr="0.6rem">
               lab {String(b.lab).padStart(2, "0")}
             </Text>

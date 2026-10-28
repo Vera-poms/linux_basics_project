@@ -46,7 +46,8 @@ export function BookmarksProvider({ children }: { children: ReactNode }) {
       const existing = bookmarks.some((b) => b.lab === lab && b.key === key);
       // Optimistic update; roll back if the server rejects it.
       const rollback = bookmarks;
-      setBookmarks(existing ? bookmarks.filter((b) => !(b.lab === lab && b.key === key)) : [...bookmarks, { lab, key, title }]);
+      // Only one bookmark is kept: a new one replaces the previous.
+      setBookmarks(existing ? [] : [{ lab, key, title }]);
       const request = existing
         ? apiFetch<null>(`/bookmarks/${lab}/${encodeURIComponent(key)}`, { method: "DELETE", token })
         : apiFetch<Bookmark>("/bookmarks", { method: "PUT", body: { lab, key, title }, token });
@@ -55,8 +56,7 @@ export function BookmarksProvider({ children }: { children: ReactNode }) {
     [bookmarks, token]
   );
 
-  const value = useMemo(() => ({ bookmarks, has, toggle }), [bookmarks, has, toggle]);
-  return <BookmarksContext.Provider value={value}>{children}</BookmarksContext.Provider>;
+  const value = useMemo(() => ({ bookmarks, has, toggle }), [bookmarks, has, toggle]);  return <BookmarksContext.Provider value={value}>{children}</BookmarksContext.Provider>;
 }
 
 export function useBookmarks(): BookmarksContextValue {

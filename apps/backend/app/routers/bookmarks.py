@@ -22,6 +22,11 @@ def list_bookmarks(user: User = Depends(get_current_user), db: Session = Depends
 def add_bookmark(payload: BookmarkIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> BookmarkOut:
     if db.get(Lab, payload.lab) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown lab")
+    # A user holds a single bookmark: saving a new one replaces any previous one.
+    db.query(Bookmark).filter(
+        Bookmark.user_id == user.id,
+        ~((Bookmark.lab_id == payload.lab) & (Bookmark.topic_key == payload.key)),
+    ).delete(synchronize_session=False)
     row = (
         db.query(Bookmark)
         .filter(Bookmark.user_id == user.id, Bookmark.lab_id == payload.lab, Bookmark.topic_key == payload.key)
