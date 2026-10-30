@@ -10,6 +10,8 @@ export interface Bookmark {
 
 interface BookmarksContextValue {
   bookmarks: Bookmark[];
+  /** True once the first fetch has settled, so "no bookmarks" can be told apart from "not loaded yet". */
+  loaded: boolean;
   has: (lab: number, key: string) => boolean;
   toggle: (lab: number, key: string, title: string) => void;
 }
@@ -24,12 +26,15 @@ const BookmarksContext = createContext<BookmarksContextValue | null>(null);
 export function BookmarksProvider({ children }: { children: ReactNode }) {
   const { token } = useAuth();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     apiFetch<Bookmark[]>("/bookmarks", { token })
       .then((rows) => {
-        if (!cancelled) setBookmarks(rows);
+        if (cancelled) return;
+        setBookmarks(rows);
+        setLoaded(true);
       })
       .catch(() => {
         // Bookmarks are a convenience; the manual still works without them.
@@ -56,7 +61,8 @@ export function BookmarksProvider({ children }: { children: ReactNode }) {
     [bookmarks, token]
   );
 
-  const value = useMemo(() => ({ bookmarks, has, toggle }), [bookmarks, has, toggle]);  return <BookmarksContext.Provider value={value}>{children}</BookmarksContext.Provider>;
+  const value = useMemo(() => ({ bookmarks, loaded, has, toggle }), [bookmarks, loaded, has, toggle]);
+  return <BookmarksContext.Provider value={value}>{children}</BookmarksContext.Provider>;
 }
 
 export function useBookmarks(): BookmarksContextValue {

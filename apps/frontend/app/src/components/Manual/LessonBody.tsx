@@ -344,7 +344,9 @@ export default function LessonBody({ lab, onRunCommand }: LessonBodyProps) {
                       <Thead>
                         <Tr>
                           {sec.compare.head.map((h, hi) => (
-                            <Th key={hi} borderColor="lb.rule">{h}</Th>
+                            <Th key={hi} borderColor="lb.rule" sx={{ "& code": { textTransform: "none" } }}>
+                              <Html as="span" html={h} />
+                            </Th>
                           ))}
                         </Tr>
                       </Thead>

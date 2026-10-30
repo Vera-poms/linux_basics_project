@@ -1,5 +1,5 @@
-import { Flex, Text } from "@chakra-ui/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Flex, Text, useToast } from "@chakra-ui/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LABS } from "./data/labs";
 import { taskState } from "./data/labHelpers";
 import type { LabCheckCtx } from "./data/types";
@@ -9,13 +9,14 @@ import { useShell } from "./state/useShell";
 import StepNav from "./components/Header/StepNav";
 import BookmarksMenu from "./components/Header/BookmarksMenu";
 import { OPEN_TOPIC_EVENT } from "./components/Manual/LessonBody";
-import { topicDomId, type Bookmark } from "./state/BookmarksContext";
+import { topicDomId, useBookmarks, type Bookmark } from "./state/BookmarksContext";
 import ManualPanel from "./components/Manual/ManualPanel";
 import ConsolePanel from "./components/Console/ConsolePanel";
 import type { InputLineHandle } from "./components/Console/InputLine";
 
 const META_COMMANDS = ["check", "hint", "solution", "reset", "next", "labs"] as const;
 type MetaCommand = (typeof META_COMMANDS)[number];
+const BOOKMARK_REMINDER_ID = "bookmark-reminder";
 
 function doCheckOutput(lab: (typeof LABS)[number], st: boolean[]): string {
   const passed = st.filter(Boolean).length;
@@ -36,6 +37,8 @@ export default function App() {
   const consoleRef = useRef<InputLineHandle>(null);
   const bootedRef = useRef(false);
   const [pendingJump, setPendingJump] = useState<Bookmark | null>(null);
+  const { bookmarks, loaded: bookmarksLoaded } = useBookmarks();
+  const toast = useToast();
 
   const lab = LABS[currentLabIndex];
 
@@ -81,8 +84,35 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskKey]);
 
-  function handleGotoLab(index: number) {
+  // Nudge learners who have nothing saved to leave themselves a place to come back to.
+  const remindToBookmark = useCallback(() => {
+    if (!bookmarksLoaded || bookmarks.length > 0 || toast.isActive(BOOKMARK_REMINDER_ID)) return;
+    toast({
+      id: BOOKMARK_REMINDER_ID,
+      title: "No bookmark saved",
+      description: "Use the bookmark icon next to a topic or example in the manual to mark where to pick up again.",
+      status: "info",
+      duration: 6000,
+      isClosable: true,
+    });
+  }, [bookmarksLoaded, bookmarks.length, toast]);
+
+  // Returning to this browser tab or window (visibilitychange covers tab switches, focus covers window switches).
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") remindToBookmark();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", remindToBookmark);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", remindToBookmark);
+    };
+  }, [remindToBookmark]);
+
+  function handleGotoLab(index: number, { remind = true } = {}) {
     if (index < 0 || index >= LABS.length) return;
+    if (remind) remindToBookmark();
     gotoLab(index);
     const target = LABS[index];
     shellApi.runSetup(target.setup);
@@ -105,7 +135,7 @@ export default function App() {
   function handleBookmarkSelect(b: Bookmark) {
     const index = LABS.findIndex((l) => l.id === b.lab);
     if (index < 0) return;
-    if (index !== currentLabIndex) handleGotoLab(index);
+    if (index !== currentLabIndex) handleGotoLab(index, { remind: false });
     setPendingJump(b);
   }
 
